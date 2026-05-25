@@ -1,0 +1,2050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MailBlast v4 — Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#080810; --s1:#0e0e1a; --s2:#141421; --s3:#1c1c2c; --s4:#252538;
+      --bdr:rgba(255,255,255,0.06); --bdr2:rgba(255,255,255,0.10);
+      --acc:#4f66f7; --acc2:#818cf8; --acc-h:#3d53e8;
+      --acc-s:rgba(79,102,247,0.12); --acc-g:rgba(79,102,247,0.20);
+      --grn:#34d399; --grn-s:rgba(52,211,153,0.10);
+      --red:#f87171; --red-s:rgba(248,113,113,0.10);
+      --amb:#fbbf24; --amb-s:rgba(251,191,36,0.10);
+      --tx:#eeeeff; --tx-m:#8888a8; --tx-h:#44445a;
+      --r:10px; --r-sm:7px; --sidebar:240px;
+    }
+    html,body { height:100%; }
+    body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--tx); font-size:13.5px; line-height:1.5; overflow:hidden; }
+    .layout { display:flex; height:100vh; }
+
+    /* Sidebar */
+    .sidebar { width:var(--sidebar); background:linear-gradient(180deg,#0c0c1e 0%,#0a0a16 100%); border-right:1px solid var(--bdr); display:flex; flex-direction:column; flex-shrink:0; position:relative; }
+    .sidebar::after { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(79,102,247,0.4),transparent); }
+    .brand { padding:18px 16px; border-bottom:1px solid var(--bdr); display:flex; align-items:center; gap:12px; }
+    .brand-logo-wrap { width:38px; height:38px; border-radius:10px; overflow:hidden; flex-shrink:0; background:linear-gradient(135deg,var(--acc) 0%,#7c3aed 100%); display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(79,102,247,0.45),0 0 0 1px rgba(255,255,255,0.08) inset; }
+    .brand-name { font-size:15px; font-weight:800; letter-spacing:-0.4px; }
+    .brand-tag  { font-size:10px; color:var(--tx-h); letter-spacing:0.3px; margin-top:1px; }
+    nav { flex:1; padding:10px 8px; overflow-y:auto; }
+    .nav-sec { font-size:9.5px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--tx-h); padding:10px 10px 4px; }
+    .nav-btn { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--r-sm); font-size:13px; color:var(--tx-m); cursor:pointer; border:none; background:none; width:100%; text-align:left; transition:all 0.13s; margin-bottom:2px; font-family:inherit; position:relative; }
+    .nav-btn:hover { background:rgba(255,255,255,0.04); color:var(--tx); }
+    .nav-btn.active { background:var(--acc-s); color:var(--acc2); font-weight:600; }
+    .nav-btn.active::before { content:''; position:absolute; left:0; top:20%; bottom:20%; width:3px; background:var(--acc); border-radius:0 3px 3px 0; }
+    .nav-btn svg { width:15px; height:15px; flex-shrink:0; opacity:0.7; }
+    .nav-btn.active svg { opacity:1; }
+    .nav-bubble { margin-left:auto; min-width:20px; height:20px; border-radius:10px; background:var(--acc); color:white; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+    .sidebar-foot { padding:12px 12px 14px; border-top:1px solid var(--bdr); }
+    .user-pill { display:flex; align-items:center; gap:10px; background:var(--s2); border:1px solid var(--bdr); border-radius:var(--r); padding:9px 12px; margin-bottom:8px; }
+    .user-av { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--acc),#7c3aed); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0; }
+    .user-em { font-size:12px; color:var(--tx-m); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
+    .logout-btn { width:100%; background:transparent; border:1px solid var(--bdr); border-radius:var(--r-sm); color:var(--tx-h); font-size:12px; font-family:inherit; padding:8px; cursor:pointer; display:flex; align-items:center; gap:6px; justify-content:center; transition:all 0.13s; }
+    .logout-btn:hover { background:rgba(248,113,113,0.08); color:var(--red); border-color:rgba(248,113,113,0.2); }
+
+    /* Main */
+    .main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+    .topbar { background:var(--s1); border-bottom:1px solid var(--bdr); padding:0 28px; height:56px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+    .topbar-title { font-size:15px; font-weight:700; letter-spacing:-0.3px; }
+    .conn-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 13px; border-radius:20px; font-size:11.5px; font-weight:600; border:1px solid transparent; }
+    .conn-badge .dot { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
+    .conn-badge .dot.pulse { animation:dotPulse 2s ease infinite; }
+    @keyframes dotPulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .conn-checking { background:rgba(251,191,36,0.08); color:var(--amb); border-color:rgba(251,191,36,0.15); }
+    .conn-ok       { background:rgba(52,211,153,0.08);  color:var(--grn); border-color:rgba(52,211,153,0.18); }
+    .conn-err      { background:var(--red-s); color:var(--red); border-color:rgba(248,113,113,0.18); }
+    .content { padding:24px 28px 60px; overflow-y:auto; flex:1; }
+    .page { display:none; }
+    .page.active { display:block; animation:fadeIn 0.18s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } }
+
+    /* Cards */
+    .card { background:var(--s1); border:1px solid var(--bdr); border-radius:14px; margin-bottom:14px; overflow:hidden; }
+    .card:hover { border-color:rgba(255,255,255,0.09); }
+    .card-hd { padding:15px 20px; border-bottom:1px solid var(--bdr); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .card-title { font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+    .card-title svg { width:14px; height:14px; color:var(--acc2); opacity:0.8; }
+    .card-desc { font-size:11px; color:var(--tx-h); margin-top:3px; }
+    .card-bd { padding:18px 20px; }
+    .step-n { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; background:var(--acc-s); color:var(--acc2); font-size:10.5px; font-weight:800; flex-shrink:0; border:1px solid rgba(79,102,247,0.2); }
+
+    /* Forms */
+    .field { margin-bottom:14px; }
+    .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+    label { display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.7px; color:var(--tx-h); margin-bottom:6px; }
+    input, select, textarea { width:100%; background:var(--s2); border:1px solid var(--bdr2); border-radius:var(--r); padding:9px 12px; font-size:13px; color:var(--tx); font-family:inherit; outline:none; transition:border-color 0.13s,box-shadow 0.13s,background 0.13s; }
+    input::placeholder, textarea::placeholder { color:var(--tx-h); }
+    input:focus, select:focus, textarea:focus { border-color:rgba(79,102,247,0.5); background:rgba(79,102,247,0.04); box-shadow:0 0 0 3px rgba(79,102,247,0.10); }
+    input[readonly], textarea[readonly] { background:var(--s3); color:var(--tx-m); cursor:default; border-color:var(--bdr); }
+    input[readonly]:focus, textarea[readonly]:focus { border-color:var(--bdr); box-shadow:none; }
+    input[type="date"]::-webkit-calendar-picker-indicator, input[type="time"]::-webkit-calendar-picker-indicator { filter:invert(0.5); cursor:pointer; }
+
+    /* Note 9: Dark dropdown options */
+    select { appearance:none; cursor:pointer; color-scheme:dark; }
+    select option { background:var(--s2); color:var(--tx); }
+    select optgroup { background:var(--s3); color:var(--tx-m); }
+
+    textarea { resize:vertical; line-height:1.6; }
+
+    /* Deadline preview */
+    .dl-preview { background:rgba(251,191,36,0.05); border:1px solid rgba(251,191,36,0.20); border-radius:var(--r); padding:14px 16px; display:none; margin-top:6px; }
+    .dl-preview.show { display:block; }
+    .dl-label { font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; font-weight:700; color:var(--amb); margin-bottom:5px; }
+    .dl-date  { font-size:20px; font-weight:900; color:#fde68a; letter-spacing:-0.3px; }
+
+    /* Buttons */
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--r); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:all 0.13s; white-space:nowrap; }
+    .btn svg { width:13px; height:13px; flex-shrink:0; }
+    .btn-primary { background:linear-gradient(135deg,var(--acc) 0%,#6d4ff7 100%); color:white; box-shadow:0 4px 14px rgba(79,102,247,0.30); }
+    .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 8px 22px rgba(79,102,247,0.42); }
+    .btn-primary:active:not(:disabled) { transform:scale(0.99); }
+    .btn-primary:disabled { opacity:0.35; cursor:not-allowed; transform:none !important; }
+    .btn-sec    { background:var(--s2); color:var(--tx-m); border:1px solid var(--bdr2); }
+    .btn-sec:hover { background:var(--s3); color:var(--tx); }
+    .btn-danger { background:var(--red-s); color:var(--red); border:1px solid rgba(248,113,113,0.15); }
+    .btn-danger:hover { background:rgba(248,113,113,0.16); }
+    .btn-warn   { background:var(--amb-s); color:var(--amb); border:1px solid rgba(251,191,36,0.18); }
+    .btn-warn:hover { background:rgba(251,191,36,0.16); }
+    .btn-grn    { background:var(--grn-s); color:var(--grn); border:1px solid rgba(52,211,153,0.18); }
+    .btn-grn:hover { background:rgba(52,211,153,0.16); }
+    .btn-pause  { background:rgba(251,191,36,0.12); color:var(--amb); border:1px solid rgba(251,191,36,0.25); }
+    .btn-pause:hover { background:rgba(251,191,36,0.22); }
+    .btn-resume { background:rgba(52,211,153,0.12); color:var(--grn); border:1px solid rgba(52,211,153,0.25); }
+    .btn-resume:hover { background:rgba(52,211,153,0.22); }
+    .btn-sm { padding:5px 11px; font-size:12px; }
+    .btn-grp { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+
+    /* Members list */
+    .stat-filters { display:flex; gap:6px; flex-wrap:wrap; }
+    .stat-pill { display:inline-flex; align-items:center; gap:4px; padding:5px 12px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; cursor:pointer; border:1px solid transparent; transition:all 0.13s; }
+    .stat-pill.active { border-color:currentColor; }
+    .sp-all     { background:var(--s3); color:var(--tx-m); }
+    .sp-all.active  { background:var(--s4); color:var(--tx); border-color:var(--bdr2); }
+    .sp-sent    { background:var(--grn-s); color:var(--grn); }
+    .sp-pending { background:var(--acc-s); color:var(--acc2); }
+    .sp-failed  { background:var(--red-s); color:var(--red); }
+    .members-list { display:flex; flex-direction:column; gap:4px; max-height:300px; overflow-y:auto; }
+    .m-row { display:flex; align-items:center; gap:10px; padding:9px 12px; background:var(--s2); border:1px solid var(--bdr); border-radius:var(--r-sm); }
+    .m-row.ok  { border-color:rgba(52,211,153,0.18); background:rgba(52,211,153,0.04); }
+    .m-row.err { border-color:rgba(248,113,113,0.18); background:rgba(248,113,113,0.04); }
+    .m-av { width:30px; height:30px; border-radius:50%; background:var(--acc-s); color:var(--acc2); font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .m-info { flex:1; min-width:0; }
+    .m-name  { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .m-email { font-size:11px; color:var(--tx-h); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .m-errtxt { font-size:10.5px; color:var(--red); margin-top:2px; }
+    .badge { display:inline-flex; align-items:center; gap:3px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+    .b-pending  { background:var(--s3); color:var(--tx-m); }
+    .b-sending  { background:var(--acc-s); color:var(--acc2); }
+    .b-sent     { background:var(--grn-s); color:var(--grn); }
+    .b-failed   { background:var(--red-s); color:var(--red); }
+    .b-complete { background:rgba(52,211,153,0.15); color:var(--grn); }
+    .b-stage1   { background:rgba(79,102,247,0.12); color:var(--acc2); }
+    .b-stage2   { background:rgba(251,191,36,0.12); color:var(--amb); }
+    .b-stage3   { background:rgba(248,113,113,0.12); color:var(--red); }
+    .b-count    { background:rgba(79,102,247,0.18); color:var(--acc2); font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; }
+
+    /* Progress */
+    .prog-wrap { background:var(--s3); border-radius:4px; height:4px; overflow:hidden; margin-bottom:7px; }
+    .prog-bar  { height:100%; background:linear-gradient(90deg,var(--acc),var(--acc2)); border-radius:4px; transition:width 0.3s; width:0%; }
+    .prog-bar.done { background:linear-gradient(90deg,#34d399,#10b981); }
+    .prog-bar.paused { background:linear-gradient(90deg,var(--amb),#f59e0b); }
+    .prog-lbl  { font-size:11.5px; color:var(--tx-h); }
+    .prog-box  { display:none; padding:12px 0 8px; }
+    .prog-box.show { display:block; }
+
+    /* Summary */
+    .summary-card { display:none; margin-top:12px; background:linear-gradient(135deg,rgba(79,102,247,0.06),rgba(124,58,237,0.04)); border:1px solid rgba(79,102,247,0.14); border-radius:var(--r); padding:16px 18px; }
+    .summary-card.show { display:block; }
+    .summary-row { display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+    .summary-stat .val { font-size:22px; font-weight:900; line-height:1; }
+    .summary-stat .lbl { font-size:10px; color:var(--tx-h); text-transform:uppercase; letter-spacing:0.5px; margin-top:1px; }
+
+    /* Table */
+    .tbl-wrap { overflow-x:auto; }
+    table.dtbl { width:100%; border-collapse:collapse; font-size:13px; }
+    table.dtbl th { text-align:left; padding:10px 14px; font-size:10px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--tx-h); border-bottom:1px solid var(--bdr); white-space:nowrap; background:var(--s2); }
+    table.dtbl td { padding:11px 14px; border-bottom:1px solid var(--bdr); color:var(--tx-m); vertical-align:middle; }
+    table.dtbl td:first-child { color:var(--tx); font-weight:500; }
+    table.dtbl tr:last-child td { border-bottom:none; }
+    table.dtbl tr:hover td { background:rgba(255,255,255,0.02); }
+
+    /* History */
+    .hist-row { border-bottom:1px solid var(--bdr); }
+    .hist-row:last-child { border-bottom:none; }
+    .hist-summary { display:flex; align-items:center; gap:14px; padding:13px 18px; cursor:pointer; transition:background 0.1s; }
+    .hist-summary:hover { background:rgba(255,255,255,0.02); }
+    .hist-ts { font-size:11px; color:var(--tx-h); white-space:nowrap; flex-shrink:0; }
+    .hist-co { font-size:13.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hist-stats { display:flex; gap:5px; flex-shrink:0; }
+    .hist-expand { color:var(--tx-h); font-size:10px; flex-shrink:0; transition:transform 0.15s; }
+    .hist-row.open .hist-expand { transform:rotate(90deg); }
+    .hist-detail { display:none; padding:0 18px 14px; }
+    .hist-row.open .hist-detail { display:block; }
+    .hist-member-list { display:flex; flex-direction:column; gap:3px; max-height:220px; overflow-y:auto; margin-top:10px; }
+    .hist-m { display:flex; align-items:center; gap:8px; padding:7px 11px; border-radius:var(--r-sm); background:var(--s2); font-size:12px; }
+    .hist-m.ok  { background:rgba(52,211,153,0.04); }
+    .hist-m.err { background:rgba(248,113,113,0.04); }
+    .hist-m-name  { font-weight:500; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hist-m-email { color:var(--tx-h); font-size:11px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hist-m-err   { color:var(--red); font-size:10.5px; flex:2; min-width:0; }
+
+    /* Sender usage bar */
+    .usage-bar-wrap { height:4px; background:var(--s3); border-radius:2px; overflow:hidden; margin-top:6px; }
+    .usage-bar { height:100%; background:linear-gradient(90deg,var(--acc),var(--acc2)); border-radius:2px; }
+
+    /* Reminder countdown */
+    .countdown-box { background:linear-gradient(135deg,rgba(79,102,247,0.08),rgba(124,58,237,0.05)); border:1px solid rgba(79,102,247,0.18); border-radius:12px; padding:20px 24px; margin-bottom:16px; display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
+    .countdown-unit { text-align:center; min-width:52px; }
+    .countdown-num  { font-size:28px; font-weight:900; color:var(--acc2); line-height:1; }
+    .countdown-lbl  { font-size:9.5px; color:var(--tx-h); text-transform:uppercase; letter-spacing:1px; margin-top:3px; }
+    .countdown-sep  { font-size:22px; font-weight:700; color:var(--tx-h); align-self:flex-start; margin-top:4px; }
+
+    /* Note 12: Accordion / batch group */
+    .batch-group { border:1px solid var(--bdr); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+    .batch-hd { display:flex; align-items:center; gap:12px; padding:12px 18px; background:var(--s2); cursor:pointer; transition:background 0.1s; }
+    .batch-hd:hover { background:var(--s3); }
+    .batch-name { font-size:13.5px; font-weight:700; flex:1; }
+    .batch-progress { font-size:11.5px; color:var(--tx-h); }
+    .batch-prog-bar-wrap { flex:1; max-width:120px; height:5px; background:var(--s4); border-radius:3px; overflow:hidden; }
+    .batch-prog-fill { height:100%; background:linear-gradient(90deg,var(--grn),#10b981); border-radius:3px; transition:width 0.3s; }
+    .batch-chevron { color:var(--tx-h); font-size:11px; transition:transform 0.15s; flex-shrink:0; }
+    .batch-group.open .batch-chevron { transform:rotate(90deg); }
+    .batch-body { display:none; }
+    .batch-group.open .batch-body { display:block; }
+
+    /* Log status */
+    .log-ok   { color:var(--grn); }
+    .log-fail { color:var(--red); }
+
+    /* Custom mail recipients */
+    .rcpt-tag { display:inline-flex; align-items:center; gap:5px; background:var(--acc-s); color:var(--acc2); border:1px solid rgba(79,102,247,0.2); border-radius:20px; padding:3px 10px 3px 12px; font-size:12px; margin:2px; }
+    .rcpt-tag button { background:none; border:none; color:var(--acc2); cursor:pointer; font-size:14px; line-height:1; padding:0; display:flex; align-items:center; opacity:0.7; }
+    .rcpt-tag button:hover { opacity:1; }
+    .rcpt-input-wrap { display:flex; flex-wrap:wrap; gap:2px; background:var(--s2); border:1px solid var(--bdr2); border-radius:var(--r); padding:7px 10px; min-height:44px; cursor:text; }
+    .rcpt-input-wrap:focus-within { border-color:rgba(79,102,247,0.5); background:rgba(79,102,247,0.04); box-shadow:0 0 0 3px rgba(79,102,247,0.10); }
+    .rcpt-input-wrap input { background:none; border:none; outline:none; font-size:13px; color:var(--tx); padding:2px 4px; min-width:160px; flex:1; box-shadow:none !important; }
+
+    /* Note 11: Placeholder chips for Quill editor */
+    .placeholder-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; margin-bottom:4px; }
+    .ph-chip { display:inline-flex; align-items:center; background:var(--acc-s); color:var(--acc2); border:1px solid rgba(79,102,247,0.22); border-radius:6px; padding:3px 10px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:'Courier New',monospace; transition:all 0.13s; }
+    .ph-chip:hover { background:var(--acc-g); border-color:rgba(79,102,247,0.4); }
+
+    /* Quill override */
+    .ql-toolbar.ql-snow { background:var(--s2); border-color:var(--bdr2) !important; border-radius:var(--r) var(--r) 0 0; }
+    .ql-container.ql-snow { background:var(--s2); border-color:var(--bdr2) !important; border-radius:0 0 var(--r) var(--r); min-height:200px; }
+    .ql-editor { color:var(--tx); font-family:'Segoe UI',system-ui,sans-serif; font-size:14px; }
+    .ql-editor.ql-blank::before { color:var(--tx-h); font-style:normal; }
+    .ql-snow .ql-stroke { stroke:var(--tx-m) !important; }
+    .ql-snow .ql-fill  { fill:var(--tx-m) !important; }
+    .ql-snow .ql-picker { color:var(--tx-m) !important; }
+    .ql-snow .ql-picker-options { background:var(--s3) !important; border-color:var(--bdr2) !important; }
+
+    /* Modal */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); z-index:100; display:none; align-items:center; justify-content:center; padding:20px; }
+    .overlay.open { display:flex; }
+    .modal { background:var(--s1); border:1px solid var(--bdr2); border-radius:16px; padding:28px; width:100%; max-width:490px; box-shadow:0 32px 80px rgba(0,0,0,0.7); animation:pop-in 0.18s ease; max-height:90vh; overflow-y:auto; }
+    .modal-wide { max-width:600px; }
+    @keyframes pop-in { from { transform:scale(0.95) translateY(10px); opacity:0; } }
+    .modal-title { font-size:16px; font-weight:800; margin-bottom:20px; letter-spacing:-0.3px; }
+    .modal-foot  { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+    .confirm-body { font-size:13.5px; color:var(--tx-m); line-height:1.6; }
+    .confirm-stats { display:flex; gap:10px; margin:16px 0; flex-wrap:wrap; }
+    .confirm-stat { background:var(--s2); border:1px solid var(--bdr2); border-radius:var(--r-sm); padding:10px 16px; font-size:12px; }
+    .confirm-stat strong { display:block; font-size:20px; font-weight:900; color:var(--acc2); line-height:1.1; margin-bottom:2px; }
+
+    /* Toggle checkbox */
+    .toggle-row { display:flex; align-items:center; gap:10px; padding:10px 0; }
+    .toggle-row input[type="checkbox"] { width:16px; height:16px; accent-color:var(--acc); cursor:pointer; flex-shrink:0; }
+    .toggle-row label { text-transform:none; letter-spacing:0; font-size:13px; color:var(--tx-m); margin-bottom:0; cursor:pointer; }
+
+    /* Empty */
+    .empty { padding:48px 20px; text-align:center; color:var(--tx-h); }
+    .empty svg { width:38px; height:38px; opacity:0.12; margin-bottom:12px; display:block; margin-inline:auto; }
+    .empty p { font-size:13px; line-height:1.6; }
+
+    /* Toast */
+    .toasts { position:fixed; bottom:24px; right:24px; z-index:999; display:flex; flex-direction:column; gap:8px; }
+    .toast { background:var(--s2); border:1px solid var(--bdr2); border-radius:var(--r); padding:12px 16px; font-size:13px; box-shadow:0 12px 36px rgba(0,0,0,0.55); display:flex; align-items:center; gap:10px; animation:slide-r 0.2s ease; max-width:340px; }
+    .toast.t-ok  { border-color:rgba(52,211,153,0.25); }
+    .toast.t-err { border-color:rgba(248,113,113,0.25); }
+    .toast.t-info { border-color:rgba(79,102,247,0.35); background:rgba(14,14,26,0.98); }
+    .toast-action-btn { background:var(--acc); color:white; border:none; border-radius:6px; padding:5px 12px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+    @keyframes slide-r { from { transform:translateX(16px); opacity:0; } }
+
+    /* Misc */
+    .divider { height:1px; background:var(--bdr); margin:16px 0; }
+    .spinner { width:13px; height:13px; border:2px solid rgba(255,255,255,0.2); border-top-color:white; border-radius:50%; animation:spin 0.6s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    ::-webkit-scrollbar { width:4px; height:4px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--s4); border-radius:2px; }
+    code { background:var(--s3); padding:2px 7px; border-radius:5px; font-size:12px; color:var(--acc2); font-family:'Courier New',monospace; }
+    .test-result { display:none; font-size:12.5px; padding:10px 14px; border-radius:var(--r); margin-top:10px; }
+    .test-result.ok  { background:var(--grn-s); color:var(--grn); border:1px solid rgba(52,211,153,0.18); display:block; }
+    .test-result.err { background:var(--red-s); color:var(--red); border:1px solid rgba(248,113,113,0.18); display:block; }
+    .info-chip { display:inline-flex; align-items:center; gap:4px; background:rgba(79,102,247,0.08); color:var(--acc2); border:1px solid rgba(79,102,247,0.15); border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; }
+
+    /* Note 8: sender count badge in tab header */
+    .sender-count-badge { display:inline-flex; align-items:center; gap:4px; background:rgba(79,102,247,0.14); color:var(--acc2); border:1px solid rgba(79,102,247,0.25); border-radius:20px; padding:3px 11px; font-size:11px; font-weight:700; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">MailBlast</div>
+        <div class="brand-tag">v4 — Bulk Email Platform</div>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-sec">Workspace</div>
+      <button class="nav-btn active" onclick="showPage('compose',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Compose &amp; Send
+        <span class="nav-bubble" id="memberBubble" style="display:none;">0</span>
+      </button>
+      <!-- Note 8: Removed senderBubble from nav; count moved to tab header -->
+      <button class="nav-btn" onclick="showPage('senders',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Sender Emails
+      </button>
+      <button class="nav-btn" onclick="showPage('reminders',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Reminders
+        <span class="nav-bubble" id="reminderBubble">0</span>
+      </button>
+      <button class="nav-btn" onclick="showPage('custommail',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Custom Mail
+      </button>
+      <div class="nav-sec">Data</div>
+      <button class="nav-btn" onclick="showPage('companies',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        Companies
+        <span class="nav-bubble" id="coBubble">0</span>
+      </button>
+      <button class="nav-btn" onclick="showPage('reports',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Reports
+        <span class="nav-bubble" id="histBubble" style="display:none;">0</span>
+      </button>
+      <button class="nav-btn" onclick="showPage('connection',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        Connection
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="user-pill">
+        <div class="user-av" id="userAv">A</div>
+        <span class="user-em" id="userEmail">—</span>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign out
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="pageTitle">Compose &amp; Send</div>
+      <div id="testBadge" class="conn-badge conn-checking" style="display:none;"><span class="dot pulse"></span> Checking…</div>
+    </div>
+    <div class="content">
+
+      <!-- ══ COMPOSE PAGE ══ -->
+      <div class="page active" id="page-compose">
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <div class="card-title"><span class="step-n">1</span> Import Members</div>
+              <div class="card-desc">Paste CSV or JSON — Name,Email per line</div>
+            </div>
+            <div class="btn-grp">
+              <span class="stat-pill sp-all active" onclick="filterMembers('all',this)">All</span>
+              <span class="stat-pill sp-sent" onclick="filterMembers('ok',this)">Sent</span>
+              <span class="stat-pill sp-pending" onclick="filterMembers('pending',this)">Pending</span>
+              <span class="stat-pill sp-failed" onclick="filterMembers('error',this)">Failed</span>
+            </div>
+          </div>
+          <div class="card-bd">
+            <div class="field">
+              <label>Paste Member Data</label>
+              <textarea id="memberInput" rows="5" placeholder="John Doe,john@example.com&#10;Jane Smith,jane@example.com&#10;&#10;Also supports: john@example.com (email only)"></textarea>
+            </div>
+            <div class="btn-grp">
+              <button class="btn btn-primary btn-sm" onclick="parseMembers()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                Parse Members
+              </button>
+              <button class="btn btn-sec btn-sm" onclick="clearMembers()">Clear</button>
+            </div>
+            <div id="mCount" style="font-size:11.5px;color:var(--tx-h);margin-top:10px;"></div>
+            <div class="members-list" id="memberList" style="margin-top:10px;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <div class="card-title"><span class="step-n">2</span> Configure Sender</div>
+              <div class="card-desc" id="coCardDesc">Select a saved company or fill in manually</div>
+            </div>
+            <div class="btn-grp">
+              <select id="coSelect" style="width:200px;" onchange="fillFromCompany()">
+                <option value="">— Select company —</option>
+              </select>
+              <button class="btn btn-sec btn-sm" id="coEditBtn" style="display:none;" onclick="editCompanyFields()">Edit</button>
+            </div>
+          </div>
+          <div class="card-bd">
+            <div class="row2">
+              <div class="field"><label>Sender / Company Name *</label><input type="text" id="senderName" placeholder="Acme Corp"></div>
+              <div class="field">
+                <label>Sender Email</label>
+                <select id="senderEmailSelect" onchange="onSenderEmailChange()">
+                  <option value="">— Auto (round-robin) —</option>
+                </select>
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Reply-To</label><input type="email" id="replyTo" placeholder="replies@company.com"></div>
+              <div class="field"><label>Login URL</label><input type="url" id="loginUrl" placeholder="https://portal.company.com"></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label>Help Phone</label><input type="text" id="helpPhone" placeholder="+91 98765 43210"></div>
+              <div class="field"><label>Help Email</label><input type="email" id="helpEmail" placeholder="support@company.com"></div>
+            </div>
+            <div class="field"><label>Message Note</label><textarea id="msgNote" rows="2" placeholder="Additional note shown in the email body…"></textarea></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><div class="card-title"><span class="step-n">3</span> Submission Deadline (Optional)</div></div>
+          <div class="card-bd">
+            <div class="row3">
+              <div class="field"><label>Deadline Date</label><input type="date" id="dlDate" onchange="updateDLPreview()"></div>
+              <div class="field"><label>Time</label><input type="time" id="dlTime" value="23:59" onchange="updateDLPreview()"></div>
+              <div class="field" style="align-self:flex-end;">
+                <label>&nbsp;</label>
+                <div class="btn-grp">
+                  <button class="btn btn-warn btn-sm" onclick="setDeadlineTomorrow()">+1 Day</button>
+                  <button class="btn btn-sec btn-sm" onclick="clearDL()">Clear</button>
+                </div>
+              </div>
+            </div>
+            <div class="dl-preview" id="dlPreview">
+              <div class="dl-label">Email will show deadline</div>
+              <div class="dl-date" id="dlDateDisplay">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><div class="card-title"><span class="step-n">4</span> Send Campaign</div></div>
+          <div class="card-bd">
+            <div class="prog-box" id="progBox">
+              <div class="prog-wrap"><div class="prog-bar" id="progBar"></div></div>
+              <div class="prog-lbl" id="progLbl">Preparing…</div>
+            </div>
+            <div id="senderInfoLine" style="font-size:11.5px;color:var(--tx-h);margin-bottom:10px;display:none;"></div>
+            <div class="btn-grp">
+              <button class="btn btn-primary" id="sendBtn" onclick="confirmSend()" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <span id="sendTxt">Send Campaign</span>
+              </button>
+              <!-- Note 11: Pause/Resume buttons -->
+              <button class="btn btn-pause btn-sm" id="pauseBtn" onclick="pauseCampaign()" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                Pause
+              </button>
+              <button class="btn btn-resume btn-sm" id="resumeBtn" onclick="resumeCampaign()" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Resume
+              </button>
+              <button class="btn btn-danger btn-sm" id="stopBtn" onclick="stopSend()" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                Stop
+              </button>
+            </div>
+            <div class="summary-card" id="summaryCard">
+              <div class="summary-row" id="summaryStats"></div>
+              <div class="btn-grp" id="summaryActions"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SENDERS PAGE ══ -->
+      <div class="page" id="page-senders">
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <!-- Note 8: Sender count badge in tab header -->
+              <div class="card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Sender Emails
+                <span class="sender-count-badge" id="senderCountBadge">0 senders</span>
+              </div>
+              <div class="card-desc">Round-robin rotation — campaigns cycle through senders automatically via redalertsol.com</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openSenderModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Sender(s)
+            </button>
+          </div>
+          <div id="sendersTableWrap" class="card-bd" style="padding:0;">
+            <div class="empty" id="sendersEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <p>No senders yet. Add sender prefixes to get started with redalertsol.com.</p>
+            </div>
+            <div class="tbl-wrap" id="sendersTable" style="display:none;">
+              <table class="dtbl">
+                <thead><tr>
+                  <th>Email Address</th><th>Total Sent</th><th>Last Used</th><th>Usage</th><th style="text-align:right;">Actions</th>
+                </tr></thead>
+                <tbody id="sendersBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ REMINDERS PAGE ══ -->
+      <div class="page" id="page-reminders">
+        <div class="countdown-box" id="countdownBox">
+          <div>
+            <div style="font-size:12px;color:var(--tx-h);margin-bottom:4px;">IST Current Time</div>
+            <div style="font-size:16px;font-weight:700;color:var(--acc2);" id="istTime">—</div>
+          </div>
+          <div style="color:var(--bdr2);font-size:20px;">|</div>
+          <div>
+            <div style="font-size:12px;color:var(--tx-h);margin-bottom:8px;">Next batch run</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="countdown-unit"><div class="countdown-num" id="cdHrs">0</div><div class="countdown-lbl">hrs</div></div>
+              <div class="countdown-sep">:</div>
+              <div class="countdown-unit"><div class="countdown-num" id="cdMins">0</div><div class="countdown-lbl">min</div></div>
+              <div class="countdown-sep">:</div>
+              <div class="countdown-unit"><div class="countdown-num" id="cdSecs">0</div><div class="countdown-lbl">sec</div></div>
+            </div>
+          </div>
+          <div style="color:var(--bdr2);font-size:20px;">|</div>
+          <div>
+            <div style="font-size:12px;color:var(--tx-h);margin-bottom:4px;">Next Run At (IST)</div>
+            <div style="font-size:16px;font-weight:700;color:var(--acc2);" id="nextRunTime">—</div>
+          </div>
+          <div style="color:var(--bdr2);font-size:20px;">|</div>
+          <div>
+            <div style="font-size:12px;color:var(--tx-h);margin-bottom:4px;">Pending Members</div>
+            <div style="font-size:16px;font-weight:700;color:var(--amb);" id="pendingCount">—</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <div class="card-title">Reminder Members</div>
+              <div class="card-desc">Grouped by Batch. Stages: 0=enrolled, 1=1st, 2=2nd, 3=final. Cron: 9AM &amp; 9PM IST.</div>
+            </div>
+            <div class="btn-grp">
+              <button class="btn btn-primary btn-sm" onclick="openAddReminderModal()">+ Add Member</button>
+              <button class="btn btn-sec btn-sm" onclick="openBulkReminderModal()">Bulk Import</button>
+              <button class="btn btn-sec btn-sm" onclick="loadReminders()">↻ Refresh</button>
+            </div>
+          </div>
+          <!-- Note 12: Accordion by batch_name -->
+          <div class="card-bd" id="remindersAccordion" style="padding:14px 16px;">
+            <div class="empty" id="remindersEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <p>No reminder members yet. Add members to start the automated reminder sequence.</p>
+            </div>
+            <div id="batchAccordion"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title">Reminder Logs</div>
+            <button class="btn btn-sec btn-sm" onclick="loadReminderLogs()">↻ Refresh</button>
+          </div>
+          <div class="card-bd" style="padding:0;">
+            <div class="empty" id="reminderLogsEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <p>No reminder logs yet.</p>
+            </div>
+            <div class="tbl-wrap" id="reminderLogsTable" style="display:none;">
+              <table class="dtbl">
+                <thead><tr><th>Sent At</th><th>Email</th><th>Subject</th><th>Stage</th><th>Sender Used</th><th>Status</th><th>Error</th></tr></thead>
+                <tbody id="reminderLogsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ CUSTOM MAIL PAGE ══ -->
+      <div class="page" id="page-custommail">
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Custom Mail Editor
+              </div>
+              <div class="card-desc">Compose a fully custom email with rich formatting. HTML is server-sanitized before sending.</div>
+            </div>
+          </div>
+          <div class="card-bd">
+            <div class="row2">
+              <div class="field">
+                <label>From Sender</label>
+                <select id="customSenderSelect"><option value="">— Auto (round-robin) —</option></select>
+              </div>
+              <div class="field"><label>Reply-To (optional)</label><input type="email" id="customReplyTo" placeholder="replies@company.com"></div>
+            </div>
+            <div class="field"><label>Sender Name (display name)</label><input type="text" id="customSenderName" placeholder="Acme Corp"></div>
+            <div class="field"><label>Subject *</label><input type="text" id="customSubject" placeholder="Important update from Acme Corp"></div>
+            <div class="field">
+              <label>Recipients <span style="color:var(--tx-h);font-weight:400;text-transform:none;letter-spacing:0;">(type email, press Enter or comma)</span></label>
+              <div class="rcpt-input-wrap" id="rcptWrap" onclick="document.getElementById('rcptInput').focus()">
+                <input type="email" id="rcptInput" placeholder="Add email address…" onkeydown="handleRcptKey(event)" onpaste="handleRcptPaste(event)">
+              </div>
+              <div style="font-size:11px;color:var(--tx-h);margin-top:4px;" id="rcptCount">0 recipients</div>
+            </div>
+            <div class="field">
+              <label>Email Body</label>
+              <div id="quillEditor" style="min-height:220px;"></div>
+              <!-- Note 11: Placeholder chips -->
+              <div style="margin-top:8px;">
+                <div style="font-size:10px;color:var(--tx-h);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Insert Placeholder</div>
+                <div class="placeholder-chips" id="placeholderChips">
+                  <span class="ph-chip" onclick="insertPlaceholder('{Name}')">&#123;Name&#125;</span>
+                  <span class="ph-chip" onclick="insertPlaceholder('{Email}')">&#123;Email&#125;</span>
+                  <span class="ph-chip" onclick="insertPlaceholder('{Phone}')">&#123;Phone&#125;</span>
+                  <span class="ph-chip" onclick="insertPlaceholder('{Company}')">&#123;Company&#125;</span>
+                  <span class="ph-chip" onclick="insertPlaceholder('{LoginUrl}')">&#123;LoginUrl&#125;</span>
+                  <span class="ph-chip" onclick="insertPlaceholder('{DeadlineDate}')">&#123;DeadlineDate&#125;</span>
+                  <span class="ph-chip" onclick="insertPlaceholder('{UnsubscribeLink}')">&#123;UnsubscribeLink&#125;</span>
+                </div>
+              </div>
+            </div>
+            <div class="prog-box" id="customProgBox" style="margin-top:12px;">
+              <div class="prog-wrap"><div class="prog-bar" id="customProgBar"></div></div>
+              <div class="prog-lbl" id="customProgLbl"></div>
+            </div>
+            <div class="btn-grp" style="margin-top:14px;">
+              <button class="btn btn-primary" id="customSendBtn" onclick="sendCustomMail()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Send Custom Mail
+              </button>
+              <button class="btn btn-danger btn-sm" id="customStopBtn" style="display:none;" onclick="customStopFlag=true;toast('Stopping…','err')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                Stop
+              </button>
+              <button class="btn btn-sec btn-sm" onclick="clearCustomForm()">Clear Form</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title">Custom Mail History</div>
+            <button class="btn btn-sec btn-sm" onclick="loadCustomHistory()">↻ Refresh</button>
+          </div>
+          <div class="card-bd" style="padding:0;">
+            <div class="empty" id="customHistEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <p>No custom mails sent yet.</p>
+            </div>
+            <div class="tbl-wrap" id="customHistTable" style="display:none;">
+              <table class="dtbl">
+                <thead><tr><th>Sent At</th><th>Subject</th><th>Sender Used</th><th>Recipients</th><th>Preview</th></tr></thead>
+                <tbody id="customHistBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ COMPANIES PAGE ══ -->
+      <div class="page" id="page-companies">
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                Companies
+              </div>
+              <div class="card-desc">Saved company profiles for quick email campaign setup</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openModal()">+ Add Company</button>
+          </div>
+          <div class="card-bd" style="padding:0;">
+            <div class="empty" id="coEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+              <p>No companies yet. Add one to speed up your email campaigns.</p>
+            </div>
+            <div class="tbl-wrap" id="coTable" style="display:none;">
+              <table class="dtbl">
+                <thead><tr><th>Name</th><th>Phone</th><th>Reply-To</th><th>Login URL</th><th>Help Email</th><th style="text-align:right;">Actions</th></tr></thead>
+                <tbody id="coBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ REPORTS PAGE ══ -->
+      <div class="page" id="page-reports">
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              Campaign History
+            </div>
+            <div class="btn-grp">
+              <button class="btn btn-sec btn-sm" onclick="loadHistory()">↻ Refresh</button>
+              <button class="btn btn-danger btn-sm" onclick="clearHistory()">Clear History</button>
+            </div>
+          </div>
+          <div class="card-bd" style="padding:0;">
+            <div class="empty" id="histEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <p>No campaign history yet. Run a campaign to see results here.</p>
+            </div>
+            <div id="histList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ CONNECTION PAGE ══ -->
+      <div class="page" id="page-connection">
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Resend API Status</div></div>
+          <div class="card-bd">
+            <div id="testBadge2" class="conn-badge conn-checking" style="display:none;"><span class="dot pulse"></span> Checking…</div>
+            <div style="margin-top:14px;">
+              <button class="btn btn-primary btn-sm" onclick="testConn()">Test Connection</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><div class="card-title">Send Test Email</div></div>
+          <div class="card-bd">
+            <div class="row2">
+              <div class="field"><label>Recipient Email</label><input type="email" id="testToEmail" placeholder="you@example.com"></div>
+              <div class="field"><label>Sender Name</label><input type="text" id="testSenderName" placeholder="MailBlast Test"></div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="testSendBtn" onclick="sendTestEmail()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Send Test Email
+            </button>
+            <div id="testResult" class="test-result"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODALS ══ -->
+
+<!-- Company modal -->
+<div class="overlay" id="coModal">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Add Company</div>
+    <input type="hidden" id="editCoId">
+    <div class="row2">
+      <div class="field"><label>Company Name *</label><input type="text" id="mName" placeholder="Acme Corp"></div>
+      <div class="field"><label>Phone</label><input type="text" id="mPhone" placeholder="+91 98765 43210"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Reply-To</label><input type="email" id="mReplyTo" placeholder="replies@company.com"></div>
+      <div class="field"><label>Login URL</label><input type="url" id="mLoginUrl" placeholder="https://portal.company.com"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Help Email</label><input type="email" id="mHelpEmail" placeholder="support@company.com"></div>
+      <div class="field"><label>Address</label><input type="text" id="mAddr" placeholder="123 Main St"></div>
+    </div>
+    <div class="field"><label>Note</label><textarea id="mNote" rows="2" placeholder="Message note shown in emails…"></textarea></div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCompany()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note 12: Updated Confirm send modal — adds Batch Name + Add to Reminders toggle -->
+<div class="overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-title">Confirm Campaign</div>
+    <div class="confirm-body">You are about to send emails. Please review:</div>
+    <div class="confirm-stats" id="confirmStats"></div>
+    <div class="confirm-body" style="margin-top:4px;">ETA: <span id="confirmEta">—</span></div>
+    <div class="divider"></div>
+    <div class="field">
+      <label>Batch Name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-h);">(optional — used for grouping in Reminders)</span></label>
+      <input type="text" id="confirmBatchName" placeholder="e.g. Batch A — January 2025">
+    </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="addToRemindersToggle">
+      <label for="addToRemindersToggle">Add these members to Reminders after sending</label>
+    </div>
+    <div id="reminderExtraFields" style="display:none;margin-top:10px;border-top:1px solid var(--bdr);padding-top:12px;">
+      <div class="row2">
+        <div class="field">
+          <label>Company (for reminders)</label>
+          <select id="confirmReminderCompany"><option value="">— None —</option></select>
+        </div>
+        <div class="field"><label>Deadline (for reminders)</label><input type="date" id="confirmReminderDeadline"></div>
+      </div>
+      <div class="field"><label>Project Name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-h);">(used in reminder subject lines)</span></label>
+        <input type="text" id="confirmProjectName" placeholder="e.g. IFMC Certification 2025">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-primary" onclick="startSend()">Send Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note 8: Overhauled Sender modal — bulk textarea + locked domain -->
+<div class="overlay" id="senderModal">
+  <div class="modal">
+    <div class="modal-title" id="senderModalTitle">Add Sender(s)</div>
+    <input type="hidden" id="editSenderId">
+    <div class="field">
+      <label>Email Prefixes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-h);">(one per line, max 20)</span></label>
+      <textarea id="senderPrefixBulk" rows="6" placeholder="info&#10;hello&#10;support&#10;noreply&#10;alerts"
+        style="font-family:'Courier New',monospace;font-size:13px;text-transform:lowercase;"></textarea>
+      <div style="font-size:11px;color:var(--tx-h);margin-top:4px;">Each line becomes a separate sender: <code>prefix@redalertsol.com</code></div>
+    </div>
+    <div class="field">
+      <label>Domain</label>
+      <input type="text" id="senderDomain" value="redalertsol.com" readonly style="background:var(--s3);color:var(--tx-m);">
+      <div style="font-size:11px;color:var(--tx-h);margin-top:4px;">Domain is fixed to redalertsol.com</div>
+    </div>
+    <div id="senderBulkPreview" style="font-size:11.5px;color:var(--acc2);margin-top:6px;font-weight:600;line-height:1.8;"></div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeSenderModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSenderBulk()">Add Senders</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sender test modal -->
+<div class="overlay" id="senderTestModal">
+  <div class="modal">
+    <div class="modal-title">Test Sender</div>
+    <div id="senderTestFromDisplay" style="font-size:13px;color:var(--acc2);margin-bottom:16px;font-weight:600;"></div>
+    <input type="hidden" id="senderTestId">
+    <div class="field"><label>Recipient Email</label><input type="email" id="senderTestEmail" placeholder="you@example.com"></div>
+    <div id="senderTestResult" class="test-result"></div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeSenderTestModal()">Cancel</button>
+      <button class="btn btn-primary" id="senderTestSendBtn" onclick="runSenderTest()">Send Test</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add reminder modal -->
+<div class="overlay" id="addReminderModal">
+  <div class="modal">
+    <div class="modal-title">Add Reminder Member</div>
+    <div class="row2">
+      <div class="field"><label>Email *</label><input type="email" id="rEmail" placeholder="member@example.com"></div>
+      <div class="field"><label>Name</label><input type="text" id="rName" placeholder="John Doe"></div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Company</label>
+        <select id="rCompanyId"><option value="">— None —</option></select>
+      </div>
+      <div class="field"><label>Deadline</label><input type="date" id="rDeadline"></div>
+    </div>
+    <div class="field"><label>Login URL</label><input type="url" id="rLoginUrl" placeholder="https://portal.company.com"></div>
+    <div class="row2">
+      <div class="field"><label>Batch Name</label><input type="text" id="rBatchName" placeholder="e.g. Batch A"></div>
+      <div class="field"><label>Project Name</label><input type="text" id="rProjectName" placeholder="e.g. IFMC 2025"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeAddReminderModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReminder()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk reminder modal -->
+<div class="overlay" id="bulkReminderModal">
+  <div class="modal modal-wide">
+    <div class="modal-title">Bulk Import Reminders</div>
+    <div class="field"><label>Paste Members (Name,Email per line)</label>
+      <textarea id="bulkReminderInput" rows="6" placeholder="John Doe,john@example.com&#10;Jane Smith,jane@example.com"></textarea>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Company (optional)</label>
+        <select id="bulkReminderCompanyId"><option value="">— None —</option></select>
+      </div>
+      <div class="field"><label>Deadline (optional)</label><input type="date" id="bulkReminderDeadline"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Batch Name</label><input type="text" id="bulkBatchName" placeholder="Batch A — Jan 2025"></div>
+      <div class="field"><label>Project Name</label><input type="text" id="bulkProjectName" placeholder="IFMC Certification 2025"></div>
+    </div>
+    <div class="field"><label>Login URL (optional)</label><input type="url" id="bulkReminderLoginUrl" placeholder="https://portal.company.com"></div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeBulkReminderModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBulkReminders()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toasts" id="toastWrap"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let members = [], statuses = {}, companies = [], senders = [], activeFilter = 'all';
+let sending = false, stopFlag = false, customStopFlag = false;
+let quillEditor = null;
+let rcptList = [];
+let countdownInterval = null;
+let activeCampaignId = null;
+let campaignIsPaused = false;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  const me = await fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json()).catch(() => ({}));
+  if (!me.authenticated) { window.location.replace('/'); return; }
+  document.getElementById('userEmail').textContent = me.email || '';
+  document.getElementById('userAv').textContent = (me.email || 'A')[0].toUpperCase();
+  loadCompanies();
+  loadSenders();
+  checkConn();
+  initQuill();
+
+  // Note 11: Show pruning admin toast if logs were pruned on login
+  const pruned = parseInt(sessionStorage.getItem('mb_pruned') || '0', 10);
+  sessionStorage.removeItem('mb_pruned');
+  if (pruned > 0) setTimeout(() => showPruneToast(pruned), 800);
+})();
+
+// Note 11: Show pruning toast on login (called after login in index.html sends prunedCount)
+function showPruneToast(count) {
+  if (count <= 0) return;
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = 'toast t-info';
+  t.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="22 11.08 12 2 2 11.08"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+    <span style="flex:1;color:var(--tx-m);">Auto-pruned <strong style="color:var(--tx);">${count}</strong> old log ${count===1?'entry':'entries'} (&gt;5 days).</span>
+    <button class="toast-action-btn" onclick="this.closest('.toast').remove();location.reload()">I Understood</button>`;
+  wrap.appendChild(t);
+}
+
+// ── Page routing ─────────────────────────────────────────────────────────────
+const pageTitles = {
+  compose: 'Compose &amp; Send', senders: 'Sender Emails', reminders: 'Auto Reminders',
+  custommail: 'Custom Mail Editor', companies: 'Companies', reports: 'Reports', connection: 'Connection'
+};
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name)?.classList.add('active');
+  if (btn) btn.classList.add('active');
+  document.getElementById('pageTitle').innerHTML = pageTitles[name] || name;
+  if (name === 'reports')    loadHistory();
+  if (name === 'reminders')  { loadReminders(); loadReminderLogs(); startCountdown(); }
+  if (name === 'custommail') { loadCustomHistory(); refreshCustomSenders(); }
+  if (name === 'senders')    loadSenders();
+  if (name !== 'reminders' && countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+}
+
+// ── Auto-check Resend connection on load ─────────────────────────────────────
+async function checkConn() {
+  const b = document.getElementById('testBadge');
+  b.style.display = 'inline-flex';
+  b.className = 'conn-badge conn-checking';
+  b.innerHTML = '<span class="dot pulse"></span> Checking…';
+  try {
+    const r = await fetch('/api/test-resend', { credentials: 'same-origin' });
+    const d = await r.json();
+    b.className = d.ok ? 'conn-badge conn-ok' : 'conn-badge conn-err';
+    b.innerHTML = `<span class="dot"></span> ${h(d.message)}`;
+  } catch {
+    b.className = 'conn-badge conn-err';
+    b.innerHTML = '<span class="dot"></span> Network error';
+  }
+}
+
+// ── Quill init ────────────────────────────────────────────────────────────────
+function initQuill() {
+  quillEditor = new Quill('#quillEditor', {
+    theme: 'snow',
+    placeholder: 'Compose your email here…',
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ color: [] }, { background: [] }],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        [{ align: [] }],
+        ['link', 'image'],
+        ['clean']
+      ]
+    }
+  });
+}
+
+// Note 11: Insert placeholder at Quill cursor
+function insertPlaceholder(text) {
+  if (!quillEditor) return;
+  const range = quillEditor.getSelection(true);
+  quillEditor.insertText(range ? range.index : quillEditor.getLength(), text);
+  toast(`Inserted ${text}`, 'ok');
+}
+
+// ── Parse & render members ────────────────────────────────────────────────────
+function h(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function parseMembers() {
+  const raw  = document.getElementById('memberInput').value.trim();
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const parsed = [];
+  for (const line of lines) {
+    const emailMatch = line.match(/[^\s,]+@[^\s,]+/);
+    if (!emailMatch) continue;
+    const email = emailMatch[0].trim();
+    const name = line.replace(email, '').replace(/[,\t]+/g, '').trim() || email.split('@')[0];
+    parsed.push({ name, email });
+  }
+  if (!parsed.length) { toast('No valid members found. Use "Name,Email" format.', 'err'); return; }
+  members = parsed; statuses = {}; activeFilter = 'all';
+  renderMembers();
+  document.getElementById('mCount').textContent = `${members.length} member${members.length !== 1 ? 's' : ''} ready to send`;
+  document.getElementById('memberBubble').textContent = members.length;
+  document.getElementById('memberBubble').style.display = '';
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('sendTxt').textContent = `Send to ${members.length} member${members.length !== 1 ? 's' : ''}`;
+  toast(`Parsed ${members.length} members`, 'ok');
+}
+
+function clearMembers() {
+  members = []; statuses = {};
+  document.getElementById('memberInput').value = '';
+  document.getElementById('mCount').textContent = '';
+  document.getElementById('memberList').innerHTML = '';
+  document.getElementById('memberBubble').style.display = 'none';
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('sendTxt').textContent = 'Send Campaign';
+  document.getElementById('summaryCard').classList.remove('show');
+}
+
+function renderMembers() {
+  const list = document.getElementById('memberList');
+  const filtered = members.filter((m, i) => {
+    if (activeFilter === 'all')     return true;
+    if (activeFilter === 'ok')      return statuses[i]?.s === 'ok';
+    if (activeFilter === 'error')   return statuses[i]?.s === 'error';
+    if (activeFilter === 'pending') return !statuses[i];
+    return true;
+  });
+  list.innerHTML = filtered.map((m) => {
+    const i = members.indexOf(m);
+    const st = statuses[i];
+    const cls = st ? (st.s === 'ok' ? 'ok' : 'err') : '';
+    const badge = st
+      ? (st.s === 'ok' ? `<span class="badge b-sent">✓ Sent</span>` : `<span class="badge b-failed">✗ Failed</span>`)
+      : `<span class="badge b-pending">Pending</span>`;
+    return `<div class="m-row ${cls}">
+      <div class="m-av">${h((m.name||'?')[0].toUpperCase())}</div>
+      <div class="m-info">
+        <div class="m-name">${h(m.name)}</div>
+        <div class="m-email">${h(m.email)}</div>
+        ${st?.e ? `<div class="m-errtxt">⚠ ${h(st.e)}</div>` : ''}
+      </div>
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function filterMembers(type, el) {
+  activeFilter = type;
+  document.querySelectorAll('.stat-pill').forEach(p => p.classList.remove('active'));
+  el?.classList.add('active');
+  renderMembers();
+}
+
+// ── Deadline ─────────────────────────────────────────────────────────────────
+function updateDLPreview() {
+  const d = document.getElementById('dlDate').value;
+  const p = document.getElementById('dlPreview');
+  if (!d) { p.classList.remove('show'); return; }
+  const [y,m,dd] = d.split('-').map(Number);
+  const disp = new Date(y,m-1,dd).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('dlDateDisplay').textContent = disp;
+  p.classList.add('show');
+}
+function setDeadlineTomorrow() {
+  const d = new Date(); d.setDate(d.getDate()+1);
+  document.getElementById('dlDate').value = d.toISOString().split('T')[0];
+  updateDLPreview();
+}
+function clearDL() {
+  document.getElementById('dlDate').value = '';
+  document.getElementById('dlPreview').classList.remove('show');
+}
+
+// ── Sender email select in compose ───────────────────────────────────────────
+function onSenderEmailChange() {
+  const v = document.getElementById('senderEmailSelect').value;
+  const line = document.getElementById('senderInfoLine');
+  if (v) { line.textContent = `Sender: ${v}`; line.style.display = ''; }
+  else   { line.textContent = 'Sender: Auto round-robin'; line.style.display = ''; }
+}
+
+// ── Companies ─────────────────────────────────────────────────────────────────
+async function loadCompanies() {
+  try {
+    const r = await fetch('/api/companies', { credentials: 'same-origin' });
+    companies = await r.json();
+    renderCompanies();
+    populateCompanyDropdowns();
+  } catch { toast('Failed to load companies', 'err'); }
+}
+
+function populateCompanyDropdowns() {
+  const selects = ['coSelect','rCompanyId','bulkReminderCompanyId','confirmReminderCompany'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    const placeholder = id === 'coSelect' ? '— Select saved company (or fill below manually) —' : '— None —';
+    el.innerHTML = `<option value="">${placeholder}</option>`;
+    companies.forEach(c => { el.innerHTML += `<option value="${h(c.id)}">${h(c.name)}</option>`; });
+    if (cur) el.value = cur;
+  });
+  document.getElementById('coBubble').textContent = companies.length;
+}
+
+function renderCompanies() {
+  const empty = document.getElementById('coEmpty');
+  const table = document.getElementById('coTable');
+  const body  = document.getElementById('coBody');
+  if (!companies.length) { empty.style.display=''; table.style.display='none'; refreshDropdown(); return; }
+  empty.style.display = 'none'; table.style.display = '';
+  body.innerHTML = companies.map(c => `<tr>
+    <td>${h(c.name)}</td>
+    <td>${h(c.phone||'—')}</td>
+    <td>${h(c.replyTo||'—')}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.loginUrl?`<a href="${h(c.loginUrl)}" target="_blank" style="color:var(--acc2);text-decoration:none;">${h(c.loginUrl)}</a>`:'—'}</td>
+    <td>${h(c.helpEmail||'—')}</td>
+    <td style="text-align:right;"><div class="btn-grp" style="justify-content:flex-end;">
+      <button class="btn btn-sec btn-sm" onclick="openModal('${h(c.id)}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="delCompany('${h(c.id)}')">Del</button>
+    </div></td>
+  </tr>`).join('');
+  refreshDropdown();
+}
+
+function refreshDropdown() {
+  const sel = document.getElementById('coSelect'), cur = sel.value;
+  sel.innerHTML = '<option value="">— Select saved company (or fill below manually) —</option>';
+  companies.forEach(c => { sel.innerHTML += `<option value="${h(c.id)}">${h(c.name)}</option>`; });
+  if (cur) sel.value = cur;
+  document.getElementById('coBubble').textContent = companies.length;
+}
+
+function fillFromCompany() {
+  const id = document.getElementById('coSelect').value;
+  const co = companies.find(c => c.id === id);
+  const fields = ['senderName','replyTo','loginUrl','helpPhone','helpEmail','msgNote'];
+  if (!co) {
+    fields.forEach(fid => document.getElementById(fid)?.removeAttribute('readonly'));
+    document.getElementById('coEditBtn').style.display = 'none';
+    document.getElementById('coCardDesc').textContent = 'Select a saved company or fill in manually';
+    return;
+  }
+  document.getElementById('senderName').value = co.name     || '';
+  document.getElementById('replyTo').value    = co.replyTo  || '';
+  document.getElementById('loginUrl').value   = co.loginUrl || '';
+  document.getElementById('helpPhone').value  = co.phone    || '';
+  document.getElementById('helpEmail').value  = co.helpEmail|| '';
+  document.getElementById('msgNote').value    = co.note     || '';
+  fields.forEach(fid => document.getElementById(fid)?.setAttribute('readonly', true));
+  document.getElementById('coEditBtn').style.display = '';
+  document.getElementById('coCardDesc').textContent = `Loaded from "${co.name}" — fields are read-only`;
+  toast(`Loaded "${co.name}"`, 'ok');
+}
+
+function editCompanyFields() {
+  const id = document.getElementById('coSelect').value;
+  const co = companies.find(c => c.id === id);
+  if (co) openModal(co.id);
+}
+
+function openModal(id) {
+  const isEdit = !!id, co = isEdit ? companies.find(c => c.id === id) : null;
+  document.getElementById('modalTitle').textContent = isEdit ? 'Edit Company' : 'Add Company';
+  document.getElementById('editCoId').value   = isEdit ? id : '';
+  document.getElementById('mName').value      = co?.name     || '';
+  document.getElementById('mPhone').value     = co?.phone    || '';
+  document.getElementById('mReplyTo').value   = co?.replyTo  || '';
+  document.getElementById('mLoginUrl').value  = co?.loginUrl || '';
+  document.getElementById('mHelpEmail').value = co?.helpEmail|| '';
+  document.getElementById('mNote').value      = co?.note     || '';
+  document.getElementById('mAddr').value      = co?.address  || '';
+  document.getElementById('coModal').classList.add('open');
+  setTimeout(() => document.getElementById('mName').focus(), 80);
+}
+function closeModal() { document.getElementById('coModal').classList.remove('open'); }
+
+async function saveCompany() {
+  const name = document.getElementById('mName').value.trim();
+  if (!name) { toast('Company name is required.', 'err'); return; }
+  const co = {
+    name, phone: document.getElementById('mPhone').value.trim(),
+    replyTo: document.getElementById('mReplyTo').value.trim(),
+    loginUrl: document.getElementById('mLoginUrl').value.trim(),
+    helpEmail: document.getElementById('mHelpEmail').value.trim(),
+    note: document.getElementById('mNote').value.trim(),
+    address: document.getElementById('mAddr').value.trim()
+  };
+  const id = document.getElementById('editCoId').value;
+  try {
+    if (id) { await fetch(`/api/companies/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(co) }); toast('Company updated','ok'); }
+    else     { await fetch('/api/companies',        { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(co) }); toast('Company added','ok'); }
+    closeModal(); await loadCompanies();
+  } catch { toast('Failed to save company','err'); }
+}
+
+async function delCompany(id) {
+  const co = companies.find(c => c.id === id);
+  if (!confirm(`Delete "${co?.name}"?`)) return;
+  try { await fetch(`/api/companies/${id}`, { method:'DELETE', credentials:'same-origin' }); toast('Company deleted','ok'); await loadCompanies(); }
+  catch { toast('Failed to delete company','err'); }
+}
+
+// ── Senders ───────────────────────────────────────────────────────────────────
+async function loadSenders() {
+  try {
+    const r = await fetch('/api/senders', { credentials:'same-origin' });
+    senders = await r.json();
+    renderSenders();
+    refreshSenderSelects();
+  } catch { toast('Failed to load senders','err'); }
+}
+
+function renderSenders() {
+  const empty  = document.getElementById('sendersEmpty');
+  const table  = document.getElementById('sendersTable');
+  const body   = document.getElementById('sendersBody');
+  const badge  = document.getElementById('senderCountBadge');
+
+  // Note 8: Update count badge in tab header
+  badge.textContent = `${senders.length} sender${senders.length !== 1 ? 's' : ''}`;
+
+  if (!senders.length) { empty.style.display=''; table.style.display='none'; return; }
+  empty.style.display = 'none'; table.style.display = '';
+  const maxSent = Math.max(...senders.map(s => s.total_sent), 1);
+  body.innerHTML = senders.map(s => {
+    const email = `${h(s.prefix)}@${h(s.domain)}`;
+    const pct = Math.round((s.total_sent / maxSent) * 100);
+    const lastUsed = s.last_used ? new Date(s.last_used + 'Z').toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    return `<tr>
+      <td><code>${email}</code></td>
+      <td>${s.total_sent.toLocaleString()}</td>
+      <td style="font-size:11.5px;color:var(--tx-h);">${lastUsed}</td>
+      <td style="min-width:100px;">
+        <div class="usage-bar-wrap"><div class="usage-bar" style="width:${pct}%"></div></div>
+        <div style="font-size:10px;color:var(--tx-h);margin-top:2px;">${pct}% of max</div>
+      </td>
+      <td style="text-align:right;"><div class="btn-grp" style="justify-content:flex-end;">
+        <button class="btn btn-grn btn-sm" onclick="openSenderTestModal(${s.id},'${email}')">Test</button>
+        <button class="btn btn-danger btn-sm" onclick="delSender(${s.id})">Del</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function refreshSenderSelects() {
+  ['senderEmailSelect','customSenderSelect'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">— Auto (round-robin) —</option>';
+    senders.forEach(s => {
+      const email = `${s.prefix}@${s.domain}`;
+      el.innerHTML += `<option value="${h(email)}">${h(email)} (${s.total_sent} sent)</option>`;
+    });
+    if (cur) el.value = cur;
+  });
+}
+
+function refreshCustomSenders() { refreshSenderSelects(); }
+
+// Note 8: Overhauled sender modal — bulk textarea, locked domain
+function openSenderModal() {
+  document.getElementById('senderModalTitle').textContent = 'Add Sender(s)';
+  document.getElementById('editSenderId').value  = '';
+  document.getElementById('senderPrefixBulk').value = '';
+  document.getElementById('senderBulkPreview').textContent = '';
+  document.getElementById('senderModal').classList.add('open');
+  setTimeout(() => document.getElementById('senderPrefixBulk').focus(), 80);
+}
+
+// Live preview of bulk prefixes
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('senderPrefixBulk')?.addEventListener('input', function() {
+    const lines = this.value.split('\n').map(l => l.trim().toLowerCase()).filter(Boolean).slice(0, 20);
+    document.getElementById('senderBulkPreview').textContent =
+      lines.length ? lines.map(p => `→ ${p}@redalertsol.com`).join('  |  ') : '';
+  });
+});
+
+function closeSenderModal() { document.getElementById('senderModal').classList.remove('open'); }
+
+// Note 8: Bulk save senders
+async function saveSenderBulk() {
+  const raw = document.getElementById('senderPrefixBulk').value.trim();
+  const prefixes = raw.split('\n').map(l => l.trim().toLowerCase()).filter(Boolean).slice(0, 20);
+  if (!prefixes.length) { toast('Enter at least one prefix.','err'); return; }
+  try {
+    const r = await fetch('/api/senders/bulk', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({ prefixes })
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Failed to add senders','err'); return; }
+    // Note 8: Success toast with count
+    toast(`${d.added} sender mail${d.added !== 1 ? 's' : ''} added successfully${d.skipped ? ` (${d.skipped} skipped/duplicate)` : ''}`, 'ok');
+    closeSenderModal();
+    await loadSenders();
+  } catch (e) { toast('Failed: ' + e.message, 'err'); }
+}
+
+async function delSender(id) {
+  if (!confirm('Delete this sender?')) return;
+  try { await fetch(`/api/senders/${id}`, { method:'DELETE', credentials:'same-origin' }); toast('Sender deleted','ok'); await loadSenders(); }
+  catch { toast('Failed to delete sender','err'); }
+}
+
+function openSenderTestModal(id, email) {
+  document.getElementById('senderTestId').value = id;
+  document.getElementById('senderTestFromDisplay').textContent = `From: ${email}`;
+  document.getElementById('senderTestEmail').value = '';
+  document.getElementById('senderTestResult').className = 'test-result';
+  document.getElementById('senderTestResult').textContent = '';
+  document.getElementById('senderTestModal').classList.add('open');
+  setTimeout(() => document.getElementById('senderTestEmail').focus(), 80);
+}
+function closeSenderTestModal() { document.getElementById('senderTestModal').classList.remove('open'); }
+
+async function runSenderTest() {
+  const id    = document.getElementById('senderTestId').value;
+  const email = document.getElementById('senderTestEmail').value.trim();
+  const res   = document.getElementById('senderTestResult');
+  const btn   = document.getElementById('senderTestSendBtn');
+  if (!email) { toast('Enter a recipient email.','err'); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  res.className = 'test-result'; res.textContent = '';
+  try {
+    const r = await fetch(`/api/senders/${id}/test`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify({ toEmail: email }) });
+    const d = await r.json();
+    res.className = `test-result ${d.ok ? 'ok' : 'err'}`;
+    res.textContent = d.message;
+    if (d.ok) await loadSenders();
+  } catch (e) { res.className = 'test-result err'; res.textContent = 'Error: ' + e.message; }
+  btn.disabled = false; btn.textContent = 'Send Test';
+}
+
+// ── Confirm & Send ────────────────────────────────────────────────────────────
+function confirmSend() {
+  if (!members.length || sending) return;
+  const name = document.getElementById('senderName').value.trim();
+  if (!name) { toast('Please enter a Sender / Company Name.','err'); return; }
+  const etaSec = members.length * 2;
+  const eta = etaSec >= 60 ? `~${Math.floor(etaSec/60)}m ${etaSec%60}s` : `~${etaSec}s`;
+  const fromEmail = document.getElementById('senderEmailSelect').value;
+  document.getElementById('confirmStats').innerHTML = `
+    <div class="confirm-stat"><strong>${members.length}</strong> Recipients</div>
+    <div class="confirm-stat"><strong style="color:var(--tx-m);">${h(name)}</strong> Sender Name</div>
+    <div class="confirm-stat"><strong style="color:var(--acc2);">${fromEmail || 'Round-robin'}</strong> From</div>`;
+  document.getElementById('confirmEta').textContent = eta;
+  document.getElementById('confirmBatchName').value = '';
+  document.getElementById('addToRemindersToggle').checked = false;
+  document.getElementById('reminderExtraFields').style.display = 'none';
+  document.getElementById('confirmModal').classList.add('open');
+}
+function closeConfirm() { document.getElementById('confirmModal').classList.remove('open'); }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('addToRemindersToggle')?.addEventListener('change', function() {
+    document.getElementById('reminderExtraFields').style.display = this.checked ? '' : 'none';
+  });
+});
+
+async function startSend() {
+  closeConfirm();
+  if (!members.length || sending) return;
+  const name = document.getElementById('senderName').value.trim();
+  const coId = document.getElementById('coSelect').value;
+  const co   = coId ? companies.find(c => c.id === coId) : { name, phone: document.getElementById('helpPhone').value.trim() };
+  const fromEmail = document.getElementById('senderEmailSelect').value || null;
+  const batchName = document.getElementById('confirmBatchName').value.trim();
+  const addToReminders = document.getElementById('addToRemindersToggle').checked;
+
+  activeCampaignId = 'cid_' + Date.now();
+  campaignIsPaused = false;
+  sending = true; stopFlag = false; statuses = {}; activeFilter = 'all';
+  document.querySelectorAll('.stat-pill').forEach(p => p.classList.remove('active'));
+  document.querySelector('.sp-all').classList.add('active');
+
+  const sendBtn = document.getElementById('sendBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
+  sendBtn.disabled = true;
+  sendBtn.innerHTML = '<div class="spinner"></div> Sending…';
+  stopBtn.style.display = 'flex';
+  pauseBtn.style.display = 'flex';
+  resumeBtn.style.display = 'none';
+
+  const pb = document.getElementById('progBox'), bar = document.getElementById('progBar'), lbl = document.getElementById('progLbl');
+  pb.classList.add('show'); bar.className = 'prog-bar'; bar.style.width='0%'; lbl.textContent='Preparing…';
+  document.getElementById('summaryCard').classList.remove('show');
+  const startTime = Date.now();
+
+  try {
+    const res = await fetch('/api/send', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({
+        members, senderName: name,
+        replyTo:      document.getElementById('replyTo').value.trim(),
+        fromEmail,
+        deadline:     document.getElementById('dlDate').value,
+        deadlineTime: document.getElementById('dlTime').value || '23:59',
+        company:      co,
+        loginUrl:     document.getElementById('loginUrl').value.trim(),
+        helpPhone:    document.getElementById('helpPhone').value.trim(),
+        helpEmail:    document.getElementById('helpEmail').value.trim(),
+        messageNote:  document.getElementById('msgNote').value.trim(),
+        campaignId:   activeCampaignId
+      })
+    });
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      if (stopFlag) { reader.cancel(); break; }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream:true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'start') { lbl.textContent = `Sending ${ev.total} emails… via ${ev.sender}`; }
+          if (ev.type === 'paused') {
+            bar.className = 'prog-bar paused';
+            lbl.textContent = `⏸ Paused — ${ev.sent} sent, ${ev.failed} failed`;
+          }
+          if (ev.type === 'progress') {
+            bar.className = 'prog-bar';
+            const pct = Math.round((ev.index / ev.total) * 100);
+            bar.style.width = pct + '%';
+            lbl.textContent = `Sent ${ev.sent} · Failed ${ev.failed} · ${ev.index}/${ev.total}`;
+            const mi = members.findIndex(m => m.email === ev.email);
+            if (mi !== -1) statuses[mi] = { s: ev.status, e: ev.error || '' };
+            renderMembers();
+          }
+          if (ev.type === 'done') {
+            bar.style.width='100%'; bar.className='prog-bar done';
+            lbl.textContent = `Done — ${ev.sent} sent, ${ev.failed} failed`;
+            showSummary(ev.sent, ev.failed, members.length, Math.round((Date.now()-startTime)/1000));
+            toast(`Campaign done: ${ev.sent} sent, ${ev.failed} failed`, ev.failed===0?'ok':'err');
+            await loadSenders();
+            // Note 12: Add to reminders if toggle was checked
+            if (addToReminders) {
+              await addMembersToReminders(batchName);
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+
+  sending = false; stopFlag = false; campaignIsPaused = false; activeCampaignId = null;
+  sendBtn.disabled = false;
+  sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Again`;
+  stopBtn.style.display = 'none';
+  pauseBtn.style.display = 'none';
+  resumeBtn.style.display = 'none';
+}
+
+// Note 12: Post-campaign add to reminders
+async function addMembersToReminders(batchName) {
+  const coId = document.getElementById('confirmReminderCompany').value;
+  const deadline = document.getElementById('confirmReminderDeadline').value;
+  const projectName = document.getElementById('confirmProjectName').value.trim();
+  const loginUrl = document.getElementById('loginUrl').value.trim();
+  try {
+    const r = await fetch('/api/reminders/bulk', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({
+        members: members.filter((_,i) => statuses[i]?.s === 'ok' || !statuses[i]),
+        companyId: coId, deadline, loginUrl, batchName, projectName
+      })
+    });
+    const d = await r.json();
+    if (d.ok) toast(`Added ${d.added} member${d.added!==1?'s':''} to Reminders${batchName?' ('+batchName+')':''}`, 'ok');
+  } catch { toast('Failed to add to reminders','err'); }
+}
+
+function stopSend() { stopFlag = true; toast('Stopping after current email…','err'); }
+
+// Note 11: Pause campaign
+async function pauseCampaign() {
+  if (!activeCampaignId || !sending) return;
+  campaignIsPaused = true;
+  document.getElementById('pauseBtn').style.display = 'none';
+  document.getElementById('resumeBtn').style.display = 'flex';
+  try {
+    await fetch(`/api/campaign/${activeCampaignId}/pause`, { method:'POST', credentials:'same-origin' });
+    toast('Campaign paused — will hold after current email', 'ok');
+  } catch { toast('Failed to pause','err'); }
+}
+
+// Note 11: Resume campaign
+async function resumeCampaign() {
+  if (!activeCampaignId || !sending) return;
+  campaignIsPaused = false;
+  document.getElementById('resumeBtn').style.display = 'none';
+  document.getElementById('pauseBtn').style.display = 'flex';
+  try {
+    await fetch(`/api/campaign/${activeCampaignId}/resume`, { method:'POST', credentials:'same-origin' });
+    toast('Campaign resumed', 'ok');
+    document.getElementById('progBar').className = 'prog-bar';
+  } catch { toast('Failed to resume','err'); }
+}
+
+function showSummary(sent, failed, total, elapsed) {
+  const card = document.getElementById('summaryCard');
+  const timeStr = elapsed >= 60 ? `${Math.floor(elapsed/60)}m ${elapsed%60}s` : `${elapsed}s`;
+  document.getElementById('summaryStats').innerHTML = `
+    <div class="summary-stat"><span class="val" style="color:var(--tx);">${total}</span><span class="lbl">Total</span></div>
+    <div class="summary-stat"><span class="val" style="color:var(--grn);">${sent}</span><span class="lbl">Sent</span></div>
+    <div class="summary-stat"><span class="val" style="color:var(--red);">${failed}</span><span class="lbl">Failed</span></div>
+    <div class="summary-stat"><span class="val" style="color:var(--tx-m);">${timeStr}</span><span class="lbl">Duration</span></div>`;
+  const actions = document.getElementById('summaryActions');
+  actions.innerHTML = '';
+  if (failed > 0) {
+    actions.innerHTML += `<button class="btn btn-danger btn-sm" onclick="resendFailed()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.58"/></svg> Resend ${failed} Failed</button>`;
+    actions.innerHTML += `<button class="btn btn-sec btn-sm" onclick="copyFailedEmails()">Copy Failed Emails</button>`;
+  }
+  card.classList.add('show');
+}
+
+function resendFailed() {
+  const failed = members.filter((_,i) => statuses[i]?.s === 'error');
+  if (!failed.length) { toast('No failed members.','err'); return; }
+  members = failed; statuses = {}; activeFilter = 'all';
+  showPage('compose', document.querySelector('.nav-btn'));
+  document.getElementById('summaryCard')?.classList.remove('show');
+  renderMembers();
+  document.getElementById('mCount').textContent = `${members.length} failed members loaded`;
+  document.getElementById('sendTxt').textContent = `Resend to ${members.length}`;
+  document.getElementById('sendBtn').disabled = false;
+  toast(`${members.length} failed members loaded for resend`,'ok');
+  confirmSend();
+}
+
+function copyFailedEmails() {
+  const emails = members.filter((_,i)=>statuses[i]?.s==='error').map(m=>m.email).join('\n');
+  navigator.clipboard.writeText(emails).then(()=>toast('Failed emails copied','ok'));
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/history', { credentials:'same-origin' });
+    const data = await r.json();
+    renderHistory(data);
+  } catch { toast('Failed to load history','err'); }
+}
+
+function renderHistory(data) {
+  const empty = document.getElementById('histEmpty'), list = document.getElementById('histList'), bubble = document.getElementById('histBubble');
+  if (!data.length) { empty.style.display=''; list.innerHTML=''; bubble.style.display='none'; return; }
+  empty.style.display='none'; bubble.textContent=data.length; bubble.style.display='';
+  list.innerHTML = data.map((entry, ei) => {
+    const ts = new Date(entry.timestamp);
+    const date = ts.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    const time = ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    const dur  = entry.duration >= 60 ? `${Math.floor(entry.duration/60)}m ${entry.duration%60}s` : `${entry.duration||0}s`;
+    const membersHtml = (entry.members||[]).map(m => `
+      <div class="hist-m ${m.status==='sent'?'ok':'err'}">
+        <span class="badge ${m.status==='sent'?'b-sent':'b-failed'}" style="flex-shrink:0;">${m.status==='sent'?'✓ Sent':'✗ Failed'}</span>
+        <span class="hist-m-name">${h(m.name)}</span>
+        <span class="hist-m-email">${h(m.email)}</span>
+        ${m.error?`<span class="hist-m-err">⚠ ${h(m.error)}</span>`:''}
+      </div>`).join('');
+    return `<div class="hist-row" id="hrow-${ei}">
+      <div class="hist-summary" onclick="toggleHistRow(${ei})">
+        <span class="hist-ts">${date}, ${time}</span>
+        <span class="hist-co">${h(entry.companyName||'—')}</span>
+        <div class="hist-stats">
+          <span class="badge b-pending">${entry.total} total</span>
+          ${entry.sent?`<span class="badge b-sent">✓ ${entry.sent}</span>`:''}
+          ${entry.failed?`<span class="badge b-failed">✗ ${entry.failed}</span>`:''}
+        </div>
+        ${entry.senderUsed?`<span class="info-chip">${h(entry.senderUsed)}</span>`:''}
+        <span style="font-size:11px;color:var(--tx-h);">${dur}</span>
+        <span class="hist-expand">▶</span>
+      </div>
+      <div class="hist-detail"><div class="hist-member-list">${membersHtml}</div></div>
+    </div>`;
+  }).join('');
+}
+
+function toggleHistRow(i) { document.getElementById('hrow-'+i).classList.toggle('open'); }
+
+async function clearHistory() {
+  if (!confirm('Clear all campaign history? This cannot be undone.')) return;
+  try { await fetch('/api/history', { method:'DELETE', credentials:'same-origin' }); toast('History cleared','ok'); loadHistory(); }
+  catch { toast('Failed to clear history','err'); }
+}
+
+// ── Reminders (Note 12: Accordion by batch_name) ──────────────────────────────
+async function loadReminders() {
+  try {
+    const r = await fetch('/api/reminders', { credentials:'same-origin' });
+    const data = await r.json();
+    renderRemindersAccordion(data);
+    document.getElementById('reminderBubble').textContent = data.filter(r=>!r.is_completed).length;
+  } catch { toast('Failed to load reminders','err'); }
+}
+
+function renderRemindersAccordion(data) {
+  const empty = document.getElementById('remindersEmpty');
+  const accordion = document.getElementById('batchAccordion');
+
+  if (!data.length) {
+    empty.style.display = '';
+    accordion.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Group by batch_name
+  const groups = {};
+  for (const r of data) {
+    const key = r.batch_name || '(No Batch)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+
+  const stageBadge = s => {
+    if (s===0) return '<span class="badge b-pending">Enrolled</span>';
+    if (s===1) return '<span class="badge b-stage1">Stage 1</span>';
+    if (s===2) return '<span class="badge b-stage2">Stage 2</span>';
+    if (s===3) return '<span class="badge b-stage3">Stage 3 (Final)</span>';
+    return s;
+  };
+
+  accordion.innerHTML = Object.entries(groups).map(([batchName, rows], gi) => {
+    const total = rows.length;
+    const completed = rows.filter(r => r.is_completed).length;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    const rowsHtml = rows.map(r => {
+      const lastSent = r.last_sent_at ? new Date(r.last_sent_at + 'Z').toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+      const deadline = r.deadline ? new Date(r.deadline+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—';
+      return `<tr>
+        <td><code style="font-size:11.5px;">${h(r.member_email)}</code></td>
+        <td>${h(r.member_name||'—')}</td>
+        <td>${h(r.company_name||'—')}</td>
+        <td>${stageBadge(r.stage)}</td>
+        <td style="font-size:11.5px;color:var(--tx-h);">${deadline}</td>
+        <td style="font-size:11.5px;color:var(--tx-h);">${lastSent}</td>
+        <td>${r.is_completed ? '<span class="badge b-complete">✓ Done</span>' : r.do_not_send ? '<span class="badge b-failed">Unsubscribed</span>' : '<span class="badge b-pending">Active</span>'}</td>
+        <td style="text-align:right;"><div class="btn-grp" style="justify-content:flex-end;">
+          ${!r.is_completed && !r.do_not_send ? `<button class="btn btn-grn btn-sm" onclick="markComplete(${r.id})">✓</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="delReminder(${r.id})">Del</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="batch-group open" id="bgroup-${gi}">
+      <div class="batch-hd" onclick="toggleBatch(${gi})">
+        <span class="batch-name">${h(batchName)}</span>
+        <span class="batch-progress">${completed}/${total} Completed</span>
+        <div class="batch-prog-bar-wrap">
+          <div class="batch-prog-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="btn-grp" onclick="event.stopPropagation()">
+          <button class="btn btn-grn btn-sm" onclick="markBatchComplete('${h(batchName)}')">Mark All ✓</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteBatch('${h(batchName)}')">Delete All</button>
+        </div>
+        <span class="batch-chevron">▶</span>
+      </div>
+      <div class="batch-body">
+        <div class="tbl-wrap">
+          <table class="dtbl">
+            <thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Stage</th><th>Deadline</th><th>Last Sent</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleBatch(gi) {
+  document.getElementById('bgroup-' + gi)?.classList.toggle('open');
+}
+
+async function markBatchComplete(batchName) {
+  if (!confirm(`Mark all members in "${batchName}" as complete?`)) return;
+  try {
+    const r = await fetch('/api/reminders', { credentials:'same-origin' });
+    const data = await r.json();
+    const toComplete = data.filter(r => (r.batch_name || '(No Batch)') === batchName && !r.is_completed);
+    for (const item of toComplete) {
+      await fetch(`/api/reminders/${item.id}/complete`, { method:'PUT', credentials:'same-origin' });
+    }
+    toast(`Marked ${toComplete.length} members complete`, 'ok');
+    await loadReminders();
+  } catch { toast('Failed to mark complete','err'); }
+}
+
+async function deleteBatch(batchName) {
+  if (!confirm(`Delete ALL members in batch "${batchName}"? This cannot be undone.`)) return;
+  try {
+    const r = await fetch('/api/reminders', { credentials:'same-origin' });
+    const data = await r.json();
+    const toDel = data.filter(r => (r.batch_name || '(No Batch)') === batchName);
+    for (const item of toDel) {
+      await fetch(`/api/reminders/${item.id}`, { method:'DELETE', credentials:'same-origin' });
+    }
+    toast(`Deleted ${toDel.length} members from "${batchName}"`, 'ok');
+    await loadReminders();
+  } catch { toast('Failed to delete batch','err'); }
+}
+
+async function markComplete(id) {
+  try { await fetch(`/api/reminders/${id}/complete`, { method:'PUT', credentials:'same-origin' }); toast('Marked complete','ok'); await loadReminders(); }
+  catch { toast('Failed','err'); }
+}
+
+async function delReminder(id) {
+  if (!confirm('Delete this reminder member?')) return;
+  try { await fetch(`/api/reminders/${id}`, { method:'DELETE', credentials:'same-origin' }); toast('Deleted','ok'); await loadReminders(); }
+  catch { toast('Failed to delete','err'); }
+}
+
+function openAddReminderModal() {
+  document.getElementById('rEmail').value = ''; document.getElementById('rName').value = '';
+  document.getElementById('rDeadline').value = ''; document.getElementById('rLoginUrl').value = '';
+  document.getElementById('rBatchName').value = ''; document.getElementById('rProjectName').value = '';
+  document.getElementById('rCompanyId').value = '';
+  document.getElementById('addReminderModal').classList.add('open');
+  setTimeout(() => document.getElementById('rEmail').focus(), 80);
+}
+function closeAddReminderModal() { document.getElementById('addReminderModal').classList.remove('open'); }
+
+async function saveReminder() {
+  const memberEmail = document.getElementById('rEmail').value.trim();
+  if (!memberEmail) { toast('Email is required','err'); return; }
+  const body = {
+    memberEmail,
+    memberName:  document.getElementById('rName').value.trim(),
+    companyId:   document.getElementById('rCompanyId').value,
+    deadline:    document.getElementById('rDeadline').value,
+    loginUrl:    document.getElementById('rLoginUrl').value.trim(),
+    batchName:   document.getElementById('rBatchName').value.trim(),
+    projectName: document.getElementById('rProjectName').value.trim()
+  };
+  try {
+    const r = await fetch('/api/reminders', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Failed','err'); return; }
+    toast('Reminder added','ok'); closeAddReminderModal(); await loadReminders();
+  } catch { toast('Failed to add reminder','err'); }
+}
+
+function openBulkReminderModal() {
+  document.getElementById('bulkReminderInput').value = '';
+  document.getElementById('bulkBatchName').value = '';
+  document.getElementById('bulkProjectName').value = '';
+  document.getElementById('bulkReminderDeadline').value = '';
+  document.getElementById('bulkReminderLoginUrl').value = '';
+  document.getElementById('bulkReminderCompanyId').value = '';
+  document.getElementById('bulkReminderModal').classList.add('open');
+}
+function closeBulkReminderModal() { document.getElementById('bulkReminderModal').classList.remove('open'); }
+
+async function saveBulkReminders() {
+  const raw = document.getElementById('bulkReminderInput').value.trim();
+  const lines = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const parsed = [];
+  for (const line of lines) {
+    const emailMatch = line.match(/[^\s,]+@[^\s,]+/);
+    if (!emailMatch) continue;
+    const email = emailMatch[0].trim();
+    const name = line.replace(email,'').replace(/[,\t]+/g,'').trim() || '';
+    parsed.push({ name, email });
+  }
+  if (!parsed.length) { toast('No valid members found','err'); return; }
+  const body = {
+    members:     parsed,
+    companyId:   document.getElementById('bulkReminderCompanyId').value,
+    deadline:    document.getElementById('bulkReminderDeadline').value,
+    loginUrl:    document.getElementById('bulkReminderLoginUrl').value.trim(),
+    batchName:   document.getElementById('bulkBatchName').value.trim(),
+    projectName: document.getElementById('bulkProjectName').value.trim()
+  };
+  try {
+    const r = await fetch('/api/reminders/bulk', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Failed','err'); return; }
+    toast(`Added ${d.added} member${d.added!==1?'s':''}${d.skipped?` (${d.skipped} skipped)`:''}`, 'ok');
+    closeBulkReminderModal(); await loadReminders();
+  } catch { toast('Failed to import reminders','err'); }
+}
+
+async function loadReminderLogs() {
+  try {
+    const r = await fetch('/api/reminder-logs', { credentials:'same-origin' });
+    const data = await r.json();
+    const empty = document.getElementById('reminderLogsEmpty');
+    const table = document.getElementById('reminderLogsTable');
+    const body  = document.getElementById('reminderLogsBody');
+    if (!data.length) { empty.style.display=''; table.style.display='none'; return; }
+    empty.style.display='none'; table.style.display='';
+    body.innerHTML = data.map(l => {
+      const ts = new Date(l.sent_at + 'Z').toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<tr>
+        <td style="font-size:11.5px;color:var(--tx-h);">${ts}</td>
+        <td><code style="font-size:11.5px;">${h(l.member_email)}</code></td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h(l.subject||'—')}</td>
+        <td>${l.stage}</td>
+        <td style="font-size:11.5px;">${h(l.sender_used||'—')}</td>
+        <td class="${l.status==='success'?'log-ok':'log-fail'}">${l.status==='success'?'✓ OK':'✗ Failed'}</td>
+        <td style="font-size:11px;color:var(--red);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h(l.error_message||'')}</td>
+      </tr>`;
+    }).join('');
+  } catch { toast('Failed to load reminder logs','err'); }
+}
+
+// ── Countdown ─────────────────────────────────────────────────────────────────
+async function startCountdown() {
+  if (countdownInterval) clearInterval(countdownInterval);
+  await fetchCountdown();
+  countdownInterval = setInterval(fetchCountdown, 1000);
+}
+
+async function fetchCountdown() {
+  try {
+    const r = await fetch('/api/reminders/next-run', { credentials:'same-origin' });
+    const d = await r.json();
+    document.getElementById('istTime').textContent   = d.currentIst;
+    document.getElementById('nextRunTime').textContent = d.nextRun;
+    document.getElementById('cdHrs').textContent     = String(d.countdownHours).padStart(2,'0');
+    document.getElementById('cdMins').textContent    = String(d.countdownMins).padStart(2,'0');
+    document.getElementById('cdSecs').textContent    = String(d.countdownSecs).padStart(2,'0');
+    document.getElementById('pendingCount').textContent = d.pending;
+  } catch {}
+}
+
+// ── Custom Mail ───────────────────────────────────────────────────────────────
+async function sendCustomMail() {
+  const subject = document.getElementById('customSubject').value.trim();
+  const body    = quillEditor ? quillEditor.root.innerHTML : '';
+  if (!subject) { toast('Subject is required.','err'); return; }
+  if (!rcptList.length) { toast('Add at least one recipient.','err'); return; }
+  if (!body || body === '<p><br></p>') { toast('Email body cannot be empty.','err'); return; }
+
+  const fromEmail  = document.getElementById('customSenderSelect').value || null;
+  const senderName = document.getElementById('customSenderName').value.trim();
+  const replyTo    = document.getElementById('customReplyTo').value.trim();
+
+  const btn = document.getElementById('customSendBtn'), stopBtn = document.getElementById('customStopBtn');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Sending…';
+  stopBtn.style.display = 'flex'; customStopFlag = false;
+
+  const pb = document.getElementById('customProgBox'), bar = document.getElementById('customProgBar'), lbl = document.getElementById('customProgLbl');
+  pb.classList.add('show'); bar.style.width='0%'; lbl.textContent = 'Preparing…';
+
+  try {
+    const res = await fetch('/api/custom-mail/send', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({ subject, body, recipients: rcptList, fromEmail, senderName, replyTo })
+    });
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      if (customStopFlag) { reader.cancel(); break; }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream:true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'progress') {
+            const pct = Math.round((ev.index / ev.total) * 100);
+            bar.style.width = pct + '%';
+            lbl.textContent = `Sent ${ev.sent} · Failed ${ev.failed} · ${ev.index}/${ev.total}`;
+          }
+          if (ev.type === 'done') {
+            bar.style.width='100%'; bar.className='prog-bar done';
+            lbl.textContent = `Done — ${ev.sent} sent, ${ev.failed} failed`;
+            toast(`Custom mail done: ${ev.sent} sent, ${ev.failed} failed`, ev.failed===0?'ok':'err');
+            loadCustomHistory(); loadSenders();
+          }
+        } catch {}
+      }
+    }
+  } catch (e) { toast('Error: ' + e.message,'err'); }
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Custom Mail`;
+  stopBtn.style.display = 'none';
+}
+
+async function loadCustomHistory() {
+  try {
+    const r = await fetch('/api/custom-mail/history', { credentials:'same-origin' });
+    const data = await r.json();
+    const empty = document.getElementById('customHistEmpty');
+    const table = document.getElementById('customHistTable');
+    const body  = document.getElementById('customHistBody');
+    if (!data.length) { empty.style.display=''; table.style.display='none'; return; }
+    empty.style.display='none'; table.style.display='';
+    body.innerHTML = data.map(e => {
+      const ts = new Date(e.sent_at+'Z').toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<tr>
+        <td style="font-size:11.5px;color:var(--tx-h);">${ts}</td>
+        <td>${h(e.subject)}</td>
+        <td style="font-size:11.5px;"><code>${h(e.sender_used||'—')}</code></td>
+        <td>${e.recipient_count}</td>
+        <td style="font-size:11.5px;color:var(--tx-h);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h(e.body_preview||'')}</td>
+      </tr>`;
+    }).join('');
+  } catch { toast('Failed to load history','err'); }
+}
+
+function clearCustomForm() {
+  if (quillEditor) quillEditor.setContents([]);
+  document.getElementById('customSubject').value = '';
+  document.getElementById('customSenderName').value = '';
+  document.getElementById('customReplyTo').value = '';
+  rcptList = [];
+  document.getElementById('rcptWrap').querySelectorAll('.rcpt-tag').forEach(t=>t.remove());
+  document.getElementById('rcptCount').textContent = '0 recipients';
+}
+
+// ── Recipients input ──────────────────────────────────────────────────────────
+function addRcpt(email) {
+  email = email.trim().toLowerCase();
+  if (!email || !email.includes('@') || rcptList.includes(email)) return;
+  rcptList.push(email);
+  const wrap = document.getElementById('rcptWrap');
+  const tag = document.createElement('span');
+  tag.className = 'rcpt-tag';
+  tag.innerHTML = `${h(email)} <button type="button" onclick="removeRcpt('${h(email)}',this)">×</button>`;
+  wrap.insertBefore(tag, document.getElementById('rcptInput'));
+  document.getElementById('rcptCount').textContent = `${rcptList.length} recipient${rcptList.length!==1?'s':''}`;
+  document.getElementById('rcptInput').value = '';
+}
+function removeRcpt(email, btn) {
+  rcptList = rcptList.filter(e => e !== email);
+  btn.closest('.rcpt-tag').remove();
+  document.getElementById('rcptCount').textContent = `${rcptList.length} recipient${rcptList.length!==1?'s':''}`;
+}
+function handleRcptKey(e) {
+  if (e.key==='Enter'||e.key===','||e.key===' ') { e.preventDefault(); addRcpt(e.target.value); }
+  if (e.key==='Backspace' && !e.target.value && rcptList.length) {
+    const last = rcptList[rcptList.length-1];
+    removeRcpt(last, document.getElementById('rcptWrap').querySelectorAll('.rcpt-tag')[rcptList.length-1]);
+  }
+}
+function handleRcptPaste(e) {
+  e.preventDefault();
+  const text = e.clipboardData.getData('text');
+  text.split(/[\s,;]+/).forEach(em => addRcpt(em));
+}
+
+// ── Connection page ───────────────────────────────────────────────────────────
+async function testConn() {
+  const b = document.getElementById('testBadge2');
+  b.style.display='inline-flex'; b.className='conn-badge conn-checking';
+  b.innerHTML='<span class="dot pulse"></span> Checking…';
+  try {
+    const r = await fetch('/api/test-resend', { credentials:'same-origin' });
+    const d = await r.json();
+    b.className = d.ok ? 'conn-badge conn-ok' : 'conn-badge conn-err';
+    b.innerHTML = `<span class="dot"></span> ${h(d.message)}`;
+    document.getElementById('testBadge').className = b.className;
+    document.getElementById('testBadge').innerHTML = b.innerHTML;
+    document.getElementById('testBadge').style.display='inline-flex';
+  } catch {
+    b.className='conn-badge conn-err'; b.innerHTML='<span class="dot"></span> Network error';
+  }
+}
+
+async function sendTestEmail() {
+  const toEmail = document.getElementById('testToEmail').value.trim();
+  const senderName = document.getElementById('testSenderName').value.trim();
+  const res = document.getElementById('testResult');
+  const btn = document.getElementById('testSendBtn');
+  if (!toEmail) { toast('Enter recipient email','err'); return; }
+  btn.disabled=true; btn.textContent='Sending…';
+  res.className='test-result'; res.textContent='';
+  try {
+    const r = await fetch('/api/test-send', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify({ toEmail, senderName }) });
+    const d = await r.json();
+    res.className = `test-result ${d.ok?'ok':'err'}`;
+    res.textContent = d.message;
+  } catch (e) { res.className='test-result err'; res.textContent='Error: '+e.message; }
+  btn.disabled=false;
+  btn.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Test Email`;
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function doLogout() {
+  try { await fetch('/api/logout', { method:'POST', credentials:'same-origin' }); } catch {}
+  window.location.replace('/');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = `toast t-${type}`;
+  const icon = type==='ok'
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--grn)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+  t.innerHTML = `${icon} <span>${h(msg)}</span>`;
+  wrap.appendChild(t);
+  setTimeout(() => t.style.opacity = '0', 3800);
+  setTimeout(() => t.remove(), 4200);
+}
+</script>
+</body>
+</html>
