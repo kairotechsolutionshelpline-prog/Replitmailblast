@@ -502,10 +502,13 @@
               </div>
               <div class="card-desc">Round-robin rotation — campaigns cycle through senders automatically via redalertsol.com</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openSenderModal()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Sender(s)
-            </button>
+            <div class="btn-grp">
+              <button class="btn btn-danger btn-sm" onclick="deleteAllSenders()">Delete All</button>
+              <button class="btn btn-primary btn-sm" onclick="openSenderModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Sender(s)
+              </button>
+            </div>
           </div>
           <div id="sendersTableWrap" class="card-bd" style="padding:0;">
             <div class="empty" id="sendersEmpty">
@@ -519,6 +522,16 @@
                 </tr></thead>
                 <tbody id="sendersBody"></tbody>
               </table>
+              <div id="sendersTblFoot" style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--bdr);background:var(--s2);">
+                <span style="font-size:12px;color:var(--tx-h);">Show:</span>
+                <select id="senderPageSizeSelect" onchange="onSenderPageSizeChange()" style="padding:4px 6px;font-size:12px;border:1px solid var(--bdr);border-radius:5px;background:var(--s3);color:var(--tx);">
+                  <option value="10" selected>10</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="9999">All</option>
+                </select>
+                <span style="font-size:12px;color:var(--tx-h);" id="senderPageInfo"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -780,6 +793,17 @@
       <div class="field"><label>Address</label><input type="text" id="mAddr" placeholder="123 Main St"></div>
     </div>
     <div class="field"><label>Note</label><textarea id="mNote" rows="2" placeholder="Message note shown in emails…"></textarea></div>
+    <div class="field">
+      <label>Company Logo <span style="font-weight:400;color:var(--tx-h);text-transform:none;letter-spacing:0;">(PNG, JPG or WEBP, max 500 KB — shown in emails)</span></label>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <img id="mLogoPreview" src="" alt="Logo" style="width:48px;height:48px;border-radius:8px;object-fit:contain;border:1px solid var(--bdr);display:none;flex-shrink:0;">
+        <div style="flex:1;min-width:0;">
+          <input type="file" id="mLogoFile" accept="image/png,image/jpeg,image/webp" onchange="onLogoFileChange()" style="font-size:12px;max-width:100%;">
+          <div style="font-size:11px;color:var(--tx-h);margin-top:4px;" id="mLogoStatus"></div>
+        </div>
+        <button class="btn btn-danger btn-sm" id="mLogoDelBtn" style="display:none;flex-shrink:0;" onclick="deleteCompanyLogo()">Remove</button>
+      </div>
+    </div>
     <div class="modal-foot">
       <button class="btn btn-sec" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCompany()">Save</button>
@@ -914,6 +938,24 @@
   </div>
 </div>
 
+<!-- Custom mail detail modal -->
+<div class="overlay" id="customMailDetailModal">
+  <div class="modal modal-wide">
+    <div class="modal-title" id="cmdSubject" style="word-break:break-word;"></div>
+    <div style="display:flex;gap:20px;margin-bottom:14px;flex-wrap:wrap;">
+      <div style="font-size:12px;color:var(--tx-h);">Sent: <strong id="cmdTs" style="color:var(--tx);">—</strong></div>
+      <div style="font-size:12px;color:var(--tx-h);">Sender: <code id="cmdSender" style="color:var(--acc2);">—</code></div>
+      <div style="font-size:12px;color:var(--tx-h);">Recipients: <strong id="cmdRcpt" style="color:var(--tx);">—</strong></div>
+    </div>
+    <div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;padding:16px;max-height:380px;overflow-y:auto;" id="cmdBodyWrap">
+      <div id="cmdBody" style="font-family:'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.7;color:#374151;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-sec" onclick="closeCustomMailDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toasts" id="toastWrap"></div>
 
@@ -926,6 +968,9 @@ let rcptList = [];
 let countdownInterval = null;
 let activeCampaignId = null;
 let campaignIsPaused = false;
+let senderPageSize = 10;
+let customHistoryData = [];
+let logoFileData = null;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
@@ -1148,7 +1193,8 @@ function renderCompanies() {
   if (!companies.length) { empty.style.display=''; table.style.display='none'; refreshDropdown(); return; }
   empty.style.display = 'none'; table.style.display = '';
   body.innerHTML = companies.map(c => `<tr>
-    <td>${h(c.name)}</td>
+    <td style="white-space:nowrap;">
+      ${c.hasLogo ? `<img src="/api/companies/${h(c.id)}/logo?t=${Date.now()}" alt="" style="width:26px;height:26px;border-radius:5px;object-fit:contain;border:1px solid var(--bdr);margin-right:8px;vertical-align:middle;" onerror="this.style.display='none'">` : ''}${h(c.name)}</td>
     <td>${h(c.phone||'—')}</td>
     <td>${h(c.replyTo||'—')}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.loginUrl?`<a href="${h(c.loginUrl)}" target="_blank" style="color:var(--acc2);text-decoration:none;">${h(c.loginUrl)}</a>`:'—'}</td>
@@ -1208,6 +1254,17 @@ function openModal(id) {
   document.getElementById('mHelpEmail').value = co?.helpEmail|| '';
   document.getElementById('mNote').value      = co?.note     || '';
   document.getElementById('mAddr').value      = co?.address  || '';
+  document.getElementById('mLogoFile').value  = '';
+  document.getElementById('mLogoStatus').textContent = '';
+  logoFileData = null;
+  if (co?.hasLogo) {
+    document.getElementById('mLogoPreview').src = `/api/companies/${encodeURIComponent(id)}/logo?t=${Date.now()}`;
+    document.getElementById('mLogoPreview').style.display = '';
+    document.getElementById('mLogoDelBtn').style.display = '';
+  } else {
+    document.getElementById('mLogoPreview').style.display = 'none';
+    document.getElementById('mLogoDelBtn').style.display = 'none';
+  }
   document.getElementById('coModal').classList.add('open');
   setTimeout(() => document.getElementById('mName').focus(), 80);
 }
@@ -1226,10 +1283,58 @@ async function saveCompany() {
   };
   const id = document.getElementById('editCoId').value;
   try {
-    if (id) { await fetch(`/api/companies/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(co) }); toast('Company updated','ok'); }
-    else     { await fetch('/api/companies',        { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(co) }); toast('Company added','ok'); }
+    let coId = id;
+    if (id) {
+      await fetch(`/api/companies/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(co) });
+      toast('Company updated','ok');
+    } else {
+      const r = await fetch('/api/companies', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(co) });
+      const d = await r.json();
+      coId = d.company?.id;
+      toast('Company added','ok');
+    }
+    if (logoFileData && coId) {
+      try {
+        await fetch(`/api/companies/${coId}/logo`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(logoFileData) });
+      } catch { toast('Logo upload failed (company was saved)', 'err'); }
+      logoFileData = null;
+    }
     closeModal(); await loadCompanies();
   } catch { toast('Failed to save company','err'); }
+}
+
+function onLogoFileChange() {
+  const file = document.getElementById('mLogoFile').files[0];
+  if (!file) { logoFileData = null; return; }
+  const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+  if (!allowed.includes(file.type)) { toast('Only PNG, JPG, WEBP allowed', 'err'); document.getElementById('mLogoFile').value = ''; return; }
+  if (file.size > 500 * 1024) { toast('Logo must be under 500 KB', 'err'); document.getElementById('mLogoFile').value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    logoFileData = { data: dataUrl.split(',')[1], mimeType: file.type };
+    document.getElementById('mLogoPreview').src = dataUrl;
+    document.getElementById('mLogoPreview').style.display = '';
+    document.getElementById('mLogoStatus').textContent = `${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function deleteCompanyLogo() {
+  const id = document.getElementById('editCoId').value;
+  if (!id) return;
+  if (!confirm('Remove this company logo?')) return;
+  try {
+    await fetch(`/api/companies/${id}/logo`, { method: 'DELETE', credentials: 'same-origin' });
+    toast('Logo removed', 'ok');
+    document.getElementById('mLogoPreview').style.display = 'none';
+    document.getElementById('mLogoPreview').src = '';
+    document.getElementById('mLogoDelBtn').style.display = 'none';
+    logoFileData = null;
+    document.getElementById('mLogoFile').value = '';
+    document.getElementById('mLogoStatus').textContent = '';
+    await loadCompanies();
+  } catch { toast('Failed to remove logo', 'err'); }
 }
 
 async function delCompany(id) {
@@ -1254,6 +1359,7 @@ function renderSenders() {
   const table  = document.getElementById('sendersTable');
   const body   = document.getElementById('sendersBody');
   const badge  = document.getElementById('senderCountBadge');
+  const info   = document.getElementById('senderPageInfo');
 
   // Note 8: Update count badge in tab header
   badge.textContent = `${senders.length} sender${senders.length !== 1 ? 's' : ''}`;
@@ -1261,7 +1367,11 @@ function renderSenders() {
   if (!senders.length) { empty.style.display=''; table.style.display='none'; return; }
   empty.style.display = 'none'; table.style.display = '';
   const maxSent = Math.max(...senders.map(s => s.total_sent), 1);
-  body.innerHTML = senders.map(s => {
+  const paginated = senders.slice(0, senderPageSize);
+  if (info) info.textContent = senders.length > senderPageSize
+    ? `Showing ${paginated.length} of ${senders.length}`
+    : `${senders.length} total`;
+  body.innerHTML = paginated.map(s => {
     const email = `${h(s.prefix)}@${h(s.domain)}`;
     const pct = Math.round((s.total_sent / maxSent) * 100);
     const lastUsed = s.last_used ? new Date(s.last_used + 'Z').toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -1279,6 +1389,21 @@ function renderSenders() {
       </div></td>
     </tr>`;
   }).join('');
+}
+
+function onSenderPageSizeChange() {
+  senderPageSize = parseInt(document.getElementById('senderPageSizeSelect').value, 10) || 10;
+  renderSenders();
+}
+
+async function deleteAllSenders() {
+  if (!senders.length) { toast('No senders to delete.', 'err'); return; }
+  if (!confirm(`Delete all ${senders.length} sender(s)? This cannot be undone.`)) return;
+  try {
+    await fetch('/api/senders/all', { method: 'DELETE', credentials: 'same-origin' });
+    toast('All senders deleted', 'ok');
+    await loadSenders();
+  } catch { toast('Failed to delete senders', 'err'); }
 }
 
 function refreshSenderSelects() {
@@ -1930,15 +2055,15 @@ async function sendCustomMail() {
 async function loadCustomHistory() {
   try {
     const r = await fetch('/api/custom-mail/history', { credentials:'same-origin' });
-    const data = await r.json();
+    customHistoryData = await r.json();
     const empty = document.getElementById('customHistEmpty');
     const table = document.getElementById('customHistTable');
     const body  = document.getElementById('customHistBody');
-    if (!data.length) { empty.style.display=''; table.style.display='none'; return; }
+    if (!customHistoryData.length) { empty.style.display=''; table.style.display='none'; return; }
     empty.style.display='none'; table.style.display='';
-    body.innerHTML = data.map(e => {
+    body.innerHTML = customHistoryData.map((e, idx) => {
       const ts = new Date(e.sent_at+'Z').toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-      return `<tr>
+      return `<tr onclick="showCustomMailDetail(${idx})" style="cursor:pointer;" title="Click to view full email">
         <td style="font-size:11.5px;color:var(--tx-h);">${ts}</td>
         <td>${h(e.subject)}</td>
         <td style="font-size:11.5px;"><code>${h(e.sender_used||'—')}</code></td>
@@ -1947,6 +2072,27 @@ async function loadCustomHistory() {
       </tr>`;
     }).join('');
   } catch { toast('Failed to load history','err'); }
+}
+
+function showCustomMailDetail(idx) {
+  const e = customHistoryData[idx];
+  if (!e) return;
+  const ts = new Date(e.sent_at+'Z').toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('cmdSubject').textContent = e.subject;
+  document.getElementById('cmdTs').textContent = ts;
+  document.getElementById('cmdSender').textContent = e.sender_used || '—';
+  document.getElementById('cmdRcpt').textContent = e.recipient_count;
+  const bodyEl = document.getElementById('cmdBody');
+  if (e.body_full) {
+    bodyEl.innerHTML = e.body_full;
+  } else {
+    bodyEl.innerHTML = `<em style="color:#9ca3af;">${h(e.body_preview || 'No body available')}</em>`;
+  }
+  document.getElementById('customMailDetailModal').classList.add('open');
+}
+
+function closeCustomMailDetail() {
+  document.getElementById('customMailDetailModal').classList.remove('open');
 }
 
 function clearCustomForm() {
