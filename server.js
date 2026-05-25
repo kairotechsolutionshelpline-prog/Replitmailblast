@@ -26,6 +26,8 @@ if (!process.env.SESSION_SECRET) {
 // ── Data directory (Railway Volume or local ./data) ───────────────────────────
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const LOGOS_DIR = path.join(DATA_DIR, 'logos');
+if (!fs.existsSync(LOGOS_DIR)) fs.mkdirSync(LOGOS_DIR, { recursive: true });
 
 // ── SQLite setup ──────────────────────────────────────────────────────────────
 const db = new Database(path.join(DATA_DIR, 'mailblast.db'));
@@ -116,6 +118,12 @@ db.exec(`
   if (!cols.includes('batch_name'))   db.exec("ALTER TABLE reminders ADD COLUMN batch_name TEXT DEFAULT ''");
   if (!cols.includes('do_not_send'))  db.exec("ALTER TABLE reminders ADD COLUMN do_not_send INTEGER DEFAULT 0");
   if (!cols.includes('project_name')) db.exec("ALTER TABLE reminders ADD COLUMN project_name TEXT DEFAULT ''");
+
+  const cmCols = db.prepare("PRAGMA table_info(custom_mail_history)").all().map(c => c.name);
+  if (!cmCols.includes('body_full'))  db.exec("ALTER TABLE custom_mail_history ADD COLUMN body_full TEXT DEFAULT ''");
+
+  const coCols = db.prepare("PRAGMA table_info(companies)").all().map(c => c.name);
+  if (!coCols.includes('logo_path'))  db.exec("ALTER TABLE companies ADD COLUMN logo_path TEXT DEFAULT ''");
 })();
 
 // ── Migrate legacy JSON → SQLite (one-time, if files exist) ──────────────────
@@ -175,6 +183,7 @@ const stmts = {
   insSender:     db.prepare('INSERT INTO senders (prefix,domain) VALUES (?,?)'),
   updSender:     db.prepare('UPDATE senders SET prefix=?,domain=? WHERE id=?'),
   delSender:     db.prepare('DELETE FROM senders WHERE id = ?'),
+  delAllSenders: db.prepare('DELETE FROM senders'),
   // NOTE: Do NOT modify nextSender or bumpSender — round-robin must stay intact
   nextSender:    db.prepare('SELECT * FROM senders ORDER BY COALESCE(last_used,\'0\') ASC, total_sent ASC LIMIT 1'),
   bumpSender:    db.prepare('UPDATE senders SET total_sent=total_sent+1, last_used=datetime(\'now\') WHERE id=?'),
@@ -210,8 +219,8 @@ const stmts = {
   pruneReminderLogs: db.prepare("DELETE FROM reminder_logs WHERE sent_at < datetime('now','-5 days')"),
 
   // Custom mail history
-  insCustomHistory: db.prepare(`INSERT INTO custom_mail_history (subject,sender_used,recipient_count,body_preview)
-                                VALUES (?,?,?,?)`),
+  insCustomHistory: db.prepare(`INSERT INTO custom_mail_history (subject,sender_used,recipient_count,body_preview,body_full)
+                                VALUES (?,?,?,?,?)`),
   allCustomHistory: db.prepare('SELECT * FROM custom_mail_history ORDER BY sent_at DESC LIMIT 100'),
 
   // Campaign history
@@ -287,8 +296,17 @@ function emailToToken(email) {
 function tokenToEmail(token) {
   try { return Buffer.from(token, 'base64url').toString('utf8'); } catch { return null; }
 }
-function buildUnsubscribeLink(email) {
-  return `${APP_BASE_URL}/unsubscribe?token=${emailToToken(email)}`;
+function getBaseUrl(req) {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
+  if (req) {
+    const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+    const host  = req.get('x-forwarded-host') || req.get('host') || `localhost:${PORT}`;
+    return `${proto}://${host}`;
+  }
+  return `http://localhost:${PORT}`;
+}
+function buildUnsubscribeLink(email, req) {
+  return `${getBaseUrl(req)}/unsubscribe?token=${emailToToken(email)}`;
 }
 
 // ── Campaign pause/resume tracking ───────────────────────────────────────────
@@ -381,7 +399,8 @@ app.get('/api/companies', requireAuth, (req, res) => {
   const rows = stmts.allCompanies.all();
   res.json(rows.map(r => ({
     id: r.id, name: r.name, phone: r.phone, replyTo: r.reply_to,
-    loginUrl: r.login_url, helpEmail: r.help_email, note: r.note, address: r.address
+    loginUrl: r.login_url, helpEmail: r.help_email, note: r.note, address: r.address,
+    hasLogo: !!(r.logo_path)
   })));
 });
 
@@ -404,6 +423,50 @@ app.put('/api/companies/:id', requireAuth, (req, res) => {
 app.delete('/api/companies/:id', requireAuth, (req, res) => {
   const info = stmts.delCompany.run(req.params.id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+// ── Company logo API ──────────────────────────────────────────────────────────
+app.get('/api/companies/:id/logo', (req, res) => {
+  const co = stmts.getCompany.get(req.params.id);
+  if (!co || !co.logo_path) return res.status(404).send('No logo');
+  const logoPath = path.join(LOGOS_DIR, co.logo_path);
+  if (!fs.existsSync(logoPath)) return res.status(404).send('Logo file not found');
+  const ext = path.extname(co.logo_path).toLowerCase();
+  const mimeMap = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+  res.set('Content-Type', mimeMap[ext] || 'image/png');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.sendFile(logoPath);
+});
+
+app.post('/api/companies/:id/logo', requireAuth, (req, res) => {
+  const { data, mimeType } = req.body;
+  if (!data || !mimeType) return res.status(400).json({ error: 'data and mimeType required' });
+  const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+  if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Only PNG, JPG, WEBP allowed' });
+  const co = stmts.getCompany.get(req.params.id);
+  if (!co) return res.status(404).json({ error: 'Company not found' });
+  const buf = Buffer.from(data, 'base64');
+  if (buf.length > 512 * 1024) return res.status(400).json({ error: 'Logo too large (max 500 KB)' });
+  const ext = mimeType === 'image/webp' ? '.webp' : mimeType === 'image/jpeg' ? '.jpg' : '.png';
+  const filename = `${req.params.id}${ext}`;
+  if (co.logo_path && co.logo_path !== filename) {
+    const oldPath = path.join(LOGOS_DIR, co.logo_path);
+    if (fs.existsSync(oldPath)) try { fs.unlinkSync(oldPath); } catch {}
+  }
+  fs.writeFileSync(path.join(LOGOS_DIR, filename), buf);
+  db.prepare('UPDATE companies SET logo_path=? WHERE id=?').run(filename, req.params.id);
+  res.json({ ok: true, filename });
+});
+
+app.delete('/api/companies/:id/logo', requireAuth, (req, res) => {
+  const co = stmts.getCompany.get(req.params.id);
+  if (!co) return res.status(404).json({ error: 'Company not found' });
+  if (co.logo_path) {
+    const logoPath = path.join(LOGOS_DIR, co.logo_path);
+    if (fs.existsSync(logoPath)) try { fs.unlinkSync(logoPath); } catch {}
+    db.prepare("UPDATE companies SET logo_path='' WHERE id=?").run(req.params.id);
+  }
   res.json({ ok: true });
 });
 
@@ -462,6 +525,12 @@ app.put('/api/senders/:id', requireAuth, (req, res) => {
     if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Sender already exists' });
     res.status(500).json({ error: e.message });
   }
+});
+
+// Note 3: Delete all senders — must be registered BEFORE /:id to avoid route conflict
+app.delete('/api/senders/all', requireAuth, (req, res) => {
+  stmts.delAllSenders.run();
+  res.json({ ok: true });
 });
 
 app.delete('/api/senders/:id', requireAuth, (req, res) => {
@@ -579,7 +648,11 @@ app.post('/api/send', requireAuth, async (req, res) => {
   if (!members?.length) return res.status(400).json({ error: 'No members provided' });
 
   const apiKey  = process.env.RESEND_API_KEY;
-  const logoUrl = process.env.LOGO_URL || null;
+  let logoUrl = process.env.LOGO_URL || null;
+  if (!logoUrl && company?.id) {
+    const coRow = stmts.getCompany.get(company.id);
+    if (coRow?.logo_path) logoUrl = `${getBaseUrl(req)}/api/companies/${company.id}/logo`;
+  }
 
   if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not set.' });
 
@@ -642,7 +715,7 @@ app.post('/api/send', requireAuth, async (req, res) => {
     }
 
     const subject = `You have been registered successfully with ${co.name}`;
-    const unsubLink = buildUnsubscribeLink(member.email);
+    const unsubLink = buildUnsubscribeLink(member.email, req);
 
     try {
       const { error } = await resend.emails.send({
@@ -653,7 +726,7 @@ app.post('/api/send', requireAuth, async (req, res) => {
           member, co, initials, deadline, deadlineTime, loginUrl,
           helpPhone, helpEmail, messageNote, logoUrl, unsubscribeLink: unsubLink
         }),
-        ...(replyTo ? { replyTo } : {})
+        ...(replyTo ? { reply_to: replyTo } : {})
       });
       if (error) throw new Error(error.message || JSON.stringify(error));
       sent++;
@@ -708,7 +781,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
         deadlineTime: '23:59', loginUrl: 'https://example.com/login',
         helpPhone: '+91 98765 43210', helpEmail: from,
         messageNote: 'This is a test email to preview your template.', logoUrl,
-        unsubscribeLink: buildUnsubscribeLink(toEmail)
+        unsubscribeLink: buildUnsubscribeLink(toEmail, req)
       })
     });
     if (error) return res.json({ ok: false, message: error.message });
@@ -853,7 +926,7 @@ app.post('/api/custom-mail/send', requireAuth, async (req, res) => {
       const { error } = await resend.emails.send({
         from: displayFrom, to: [to], subject,
         html: cleanHtml,
-        ...(replyTo ? { replyTo } : {})
+        ...(replyTo ? { reply_to: replyTo } : {})
       });
       if (error) throw new Error(error.message);
       sent++;
@@ -869,7 +942,7 @@ app.post('/api/custom-mail/send', requireAuth, async (req, res) => {
 
   if (!controller.signal.aborted) {
     const preview = cleanHtml.replace(/<[^>]+>/g, '').substring(0, 200);
-    stmts.insCustomHistory.run(subject, from, sent, preview);
+    stmts.insCustomHistory.run(subject, from, sent, preview, cleanHtml);
   }
 
   emit({ type: 'done', sent, failed, sender: from });
@@ -907,7 +980,6 @@ async function runReminderBatch() {
     return;
   }
 
-  const logoUrl = process.env.LOGO_URL || null;
   console.log(`[Reminder] Processing ${pending.length} reminders...`);
 
   for (const reminder of pending) {
@@ -926,6 +998,11 @@ async function runReminderBatch() {
       phone:   reminder.company_phone || '',
       address: ''
     };
+    let logoUrl = process.env.LOGO_URL || null;
+    if (!logoUrl && reminder.company_id) {
+      const coRow = stmts.getCompany.get(reminder.company_id);
+      if (coRow?.logo_path) logoUrl = `${getBaseUrl(null)}/api/companies/${reminder.company_id}/logo`;
+    }
 
     // Note 7: Parse template variables in subject
     const templateVars = {
@@ -1009,11 +1086,11 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Registration Confirmation</title></head>
-<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:36px 16px;"><tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);max-width:600px;width:100%;">
-  <tr><td style="background:#1a3fa8;padding:26px 32px;">
-    <table cellpadding="0" cellspacing="0"><tr>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:16px;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:24px 8px;"><tr><td align="center">
+<table cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);max-width:600px;width:100%;">
+  <tr><td style="background:#1a3fa8;padding:22px 24px;">
+    <table cellpadding="0" cellspacing="0" width="100%"><tr>
       ${logoBlock}
       <td style="padding-left:14px;">
         <div style="color:white;font-size:19px;font-weight:700;letter-spacing:-0.3px;">${escHtml(co.name)}</div>
@@ -1021,7 +1098,7 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
       </td>
     </tr></table>
   </td></tr>
-  <tr><td style="padding:28px 32px 0;">
+  <tr><td style="padding:24px 24px 0;">
     <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;font-weight:500;">Dear ${escHtml(member.name || 'Member')},</p>
     <div style="background:#dcfce7;color:#166534;padding:9px 18px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:18px;border:1px solid #bbf7d0;display:inline-block;">&#10003; Registered successfully</div>
     <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.75;">You have been successfully registered with <strong style="color:#1a3fa8;">${escHtml(co.name)}</strong>.<br>We're glad to have you on board!</p>
@@ -1044,8 +1121,8 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
       <a href="${loginUrl}" style="display:inline-block;background:#1a3fa8;color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
 
-  ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 32px 28px;">
-    <div style="background:#1a3fa8;border-radius:10px;padding:20px 24px;">
+  ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
+    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
       <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
       ${helpPhone ? `
       <div style="font-size:13px;color:#e0e7ff;margin-bottom:6px;">&#128222; Helpline: <strong style="color:#ffffff;">${escHtml(helpPhone)}</strong></div>
@@ -1059,7 +1136,7 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
     </div>
   </td></tr>` : ''}
 
-  <tr><td style="background:#f8f9fa;padding:16px 32px 14px;border-top:1px solid #e5e7eb;text-align:center;">
+  <tr><td style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e5e7eb;text-align:center;">
     <p style="margin:0 0 6px;font-size:12.5px;color:#6b7280;">Warm regards,<br><strong style="color:#374151;">${escHtml(co.name)} Team</strong></p>
     ${unsubscribeLink ? `<p style="margin:0;font-size:10.5px;color:#9ca3af;">
       <a href="${escHtml(unsubscribeLink)}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe from future emails</a>
@@ -1103,12 +1180,12 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, 
 
   const headerBg = stage === 3 ? '#7f1d1d' : stage === 2 ? '#92400e' : '#1a3fa8';
 
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHtml(stageLabels[stage])}</title></head>
-<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:36px 16px;"><tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);max-width:600px;width:100%;">
-  <tr><td style="background:${headerBg};padding:26px 32px;">
-    <table cellpadding="0" cellspacing="0"><tr>
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(stageLabels[stage])}</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:16px;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:24px 8px;"><tr><td align="center">
+<table cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);max-width:600px;width:100%;">
+  <tr><td style="background:${headerBg};padding:22px 24px;">
+    <table cellpadding="0" cellspacing="0" width="100%"><tr>
       ${logoBlock}
       <td style="padding-left:14px;">
         <div style="color:white;font-size:19px;font-weight:700;">${escHtml(co.name)}</div>
@@ -1116,7 +1193,7 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, 
       </td>
     </tr></table>
   </td></tr>
-  <tr><td style="padding:28px 32px;">
+  <tr><td style="padding:24px 24px;">
     <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;font-weight:500;">Dear ${escHtml(member.name || 'Member')},</p>
     <p style="font-size:14px;color:#374151;line-height:1.75;margin-bottom:20px;">${stageMessages[stage]}</p>
     ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
@@ -1126,7 +1203,7 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, 
       <a href="${loginUrl}" style="display:inline-block;background:${stageColors[stage]};color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Complete Your Action</a></div>` : ''}
     ${helpEmail ? `<p style="font-size:12px;color:#6b7280;">Questions? Email us at <a href="mailto:${escHtml(helpEmail)}" style="color:#2563eb;">${escHtml(helpEmail)}</a></p>` : ''}
   </td></tr>
-  <tr><td style="background:#f8f9fa;padding:14px 32px;border-top:1px solid #e5e7eb;text-align:center;">
+  <tr><td style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e5e7eb;text-align:center;">
     <p style="margin:0 0 5px;font-size:12px;color:#9ca3af;">Sent by ${escHtml(co.name)} via MailBlast</p>
     ${unsubscribeLink ? `<p style="margin:0;font-size:10.5px;color:#9ca3af;">
       <a href="${escHtml(unsubscribeLink)}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe from future emails</a>
