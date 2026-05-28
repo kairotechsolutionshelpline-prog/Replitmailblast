@@ -641,7 +641,6 @@ app.post('/api/send', requireAuth, async (req, res) => {
   const {
     members, senderName, replyTo, fromEmail,
     deadline, deadlineTime, company,
-    loginUrl, helpPhone, helpEmail, messageNote,
     campaignId
   } = req.body;
 
@@ -764,7 +763,7 @@ app.post('/api/send', requireAuth, async (req, res) => {
 app.post('/api/test-send', requireAuth, async (req, res) => {
   const { toEmail, senderName, fromEmail, template } = req.body;
   const apiKey  = process.env.RESEND_API_KEY;
-  const logoUrl = process.env.LOGO_URL || null;
+  let logoUrl = process.env.LOGO_URL || null;
 
   let from = fromEmail;
   if (!from) from = getNextSender();
@@ -1053,20 +1052,8 @@ async function runReminderBatch() {
       const coRow = stmts.getCompany.get(reminder.company_id);
       if (coRow?.logo_path) logoUrl = `${APP_BASE_URL}/api/companies/${reminder.company_id}/logo`;
     }
-
-    // Note 7: Parse template variables in subject
-    const templateVars = {
-      firstName:    (reminder.member_name || '').split(' ')[0],
-      memberName:   reminder.member_name || 'Member',
-      projectName:  reminder.project_name || co.name,
-      deadlineDate: reminder.deadline ? formatDeadlineDate(reminder.deadline) : '',
-      companyName:  co.name,
-      email:        reminder.member_email,
-      loginUrl:     reminder.login_url || ''
-    };
-
-    const subject = buildReminderSubject(nextStage, co.name);
-    const unsubLink = buildUnsubscribeLink(reminder.member_email);
+const subject = buildReminderSubject(nextStage, co.name);
+    const unsubLink = `${APP_BASE_URL}/unsubscribe?token=${emailToToken(reminder.member_email)}`;
 
     try {
       const resend = new Resend(apiKey);
@@ -1223,7 +1210,6 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
   const stageBadgeLabel = stage === 3 ? '⚠ Final Notice' : stage === 2 ? '⏰ 2nd Reminder' : '🔔 Reminder';
   const stageLabels     = ['', 'Reminder', '2nd Reminder', 'Final Notice'];
   const headerBg        = stage === 3 ? '#7f1d1d' : stage === 2 ? '#92400e' : '#1a3fa8';
-  const btnColor        = stage === 3 ? '#dc2626' : stage === 2 ? '#d97706' : '#1a3fa8';
 
   const deadlineWarning = stage === 3
     ? 'Finish your project by today midnight — 11:59'
@@ -1252,6 +1238,9 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
     <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;font-weight:500;">Dear ${escHtml(member.name || 'Member')},</p>
     <div style="background:${stageBadgeColor};color:${stageBadgeText};padding:9px 18px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:18px;border:1px solid ${stageBadgeBorder};display:inline-block;">${stageBadgeLabel}</div>
     <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.75;">${stageMessages[stage]}</p>
+    ${projectName ? `<div style="background:#f0f7ff;border-left:3px solid #1a3fa8;padding:10px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:4px;letter-spacing:0.3px;">PROJECT</div>
+      <div style="font-size:13px;color:#374151;font-weight:600;">${escHtml(projectName)}</div></div>` : ''}
     ${noteText ? `<div style="background:#f0f7ff;border-left:3px solid #2563eb;padding:13px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">
       <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:6px;letter-spacing:0.3px;">NOTE</div>
       <div style="font-size:13px;color:#374151;line-height:1.7;">${escHtml(noteText).replace(/\n/g,'<br>')}</div></div>` : ''}
