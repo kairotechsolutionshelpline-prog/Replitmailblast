@@ -649,14 +649,20 @@ app.post('/api/send', requireAuth, async (req, res) => {
 
   const apiKey  = process.env.RESEND_API_KEY;
   let logoUrl = process.env.LOGO_URL || null;
-  if (!logoUrl && company?.id) {
-    const coRow = stmts.getCompany.get(company.id);
-    if (coRow?.logo_path) logoUrl = `${getBaseUrl(req)}/api/companies/${company.id}/logo`;
-  }
+  if (!logoUrl && coRow?.logo_path) logoUrl = `${getBaseUrl(req)}/api/companies/${company.id}/logo`;
 
   if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not set.' });
 
- let fromAddr = fromEmail;
+  if (!company?.id) return res.status(400).json({ error: 'No company selected. Please select a company before sending.' });
+  const coRow = stmts.getCompany.get(company.id);
+  if (!coRow) return res.status(400).json({ error: 'Selected company not found. Please select a valid company.' });
+
+  const companyHelpPhone  = coRow.phone      || '';
+  const companyHelpEmail  = coRow.help_email || '';
+  const companyLoginUrl   = coRow.login_url  || '';
+  const companyNote       = coRow.note       || '';
+
+  let fromAddr = fromEmail;
   if (!fromAddr) fromAddr = getNextSender();
   if (!fromAddr && process.env.SENDER_EMAIL) fromAddr = process.env.SENDER_EMAIL;
   const senderSource = fromAddr || null;
@@ -717,8 +723,12 @@ app.post('/api/send', requireAuth, async (req, res) => {
         to: [member.email],
         subject,
         html: buildPosterEmail({
-          member, co, initials, deadline, deadlineTime, loginUrl,
-          helpPhone, helpEmail, messageNote, logoUrl, unsubscribeLink: unsubLink
+          member, co, initials, deadline, deadlineTime,
+          loginUrl: companyLoginUrl,
+          helpPhone: companyHelpPhone,
+          helpEmail: companyHelpEmail,
+          messageNote: companyNote,
+          logoUrl, unsubscribeLink: unsubLink
         }),
         ...(replyTo ? { reply_to: replyTo } : {})
       });
