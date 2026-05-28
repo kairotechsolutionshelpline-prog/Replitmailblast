@@ -656,16 +656,10 @@ app.post('/api/send', requireAuth, async (req, res) => {
 
   if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not set.' });
 
-  let fromAddr = fromEmail;
-  let senderSource = fromEmail || null;
-  if (!fromAddr) {
-    fromAddr = getNextSender();
-    senderSource = fromAddr;
-  }
-  if (!fromAddr && process.env.SENDER_EMAIL) {
-    fromAddr = process.env.SENDER_EMAIL;
-    senderSource = fromAddr;
-  }
+ let fromAddr = fromEmail;
+  if (!fromAddr) fromAddr = getNextSender();
+  if (!fromAddr && process.env.SENDER_EMAIL) fromAddr = process.env.SENDER_EMAIL;
+  const senderSource = fromAddr || null;
   if (!fromAddr) return res.status(400).json({ error: 'No sender configured. Add senders in the Senders tab.' });
 
   const resend      = new Resend(apiKey);
@@ -1038,7 +1032,8 @@ async function runReminderBatch() {
 
       if (error) throw new Error(error.message);
 
-      stmts.updReminderStage.run(nextStage, reminder.id);
+       stmts.updReminderStage.run(nextStage, reminder.id);
+      if (nextStage === 3) stmts.setReminderComplete.run(reminder.id);
       stmts.insReminderLog.run(reminder.member_email, subject, 'success', '', nextStage, senderEmail);
       console.log(`[Reminder] Sent stage ${nextStage} to ${reminder.member_email}`);
     } catch (e) {
