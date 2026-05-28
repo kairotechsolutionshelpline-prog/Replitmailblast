@@ -812,7 +812,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 3,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpEmail: from, logoUrl, projectName: '',
+      helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
       unsubscribeLink: unsubLink
     });
   } else {
