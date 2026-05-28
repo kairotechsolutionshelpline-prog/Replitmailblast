@@ -802,15 +802,6 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 3,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '+91 98765 43210', helpEmail: from,
-      noteText: 'This is a sample note from company settings.',
-      logoUrl, projectName: '', unsubscribeLink: unsubLink
-    });
-  } else if (template === 'reminder3') {
-    subject = buildReminderSubject(3, co.name);
-    html = buildReminderEmail({
-      member: testMember, co, stage: 3,
-      deadline: testDeadline, loginUrl: testLoginUrl,
       helpEmail: from, logoUrl, projectName: '',
       unsubscribeLink: unsubLink
     });
@@ -1165,14 +1156,13 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
     ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700;margin-bottom:8px;">&#128197; Submission Deadline</div>
       <div style="font-size:28px;font-weight:900;color:#78350f;margin-bottom:8px;line-height:1.2;">&#127942; ${escHtml(deadlineDisplay)}</div>
-      <div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning} &mdash; ${escHtml(timeDisplay)}</div>
-      <div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div></div>` : ''}
+<div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning}</div>
+      ${stage !== 3 ? `<div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div>` : ''}</div>` : ''}
     ${loginUrl ? `<div style="text-align:center;margin-bottom:28px;">
-      <a href="${loginUrl}" style="display:inline-block;background:#1a3fa8;color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
+      <a href="${loginUrl}" style="display:inline-block;background:${btnColor};color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
-
   ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
-    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
+    <div style="background:${headerBg};border-radius:10px;padding:18px 20px;">
       <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
       ${helpPhone ? `
       <div style="font-size:13px;color:#e0e7ff;margin-bottom:6px;">&#128222; Helpline: <strong style="color:#ffffff;">${escHtml(helpPhone)}</strong></div>
@@ -1185,7 +1175,6 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
       <div style="font-size:12px;color:#93c5fd;">You can also email us at: <a href="mailto:${escHtml(helpEmail)}" style="color:#bfdbfe;text-decoration:underline;">${escHtml(helpEmail)}</a></div>` : ''}
     </div>
   </td></tr>` : ''}
-
   <tr><td style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e5e7eb;text-align:center;">
     <p style="margin:0 0 6px;font-size:12.5px;color:#6b7280;">Warm regards,<br><strong style="color:#374151;">${escHtml(co.name)} Team</strong></p>
     ${unsubscribeLink ? `<p style="margin:0;font-size:10.5px;color:#9ca3af;">
@@ -1265,13 +1254,13 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
     ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700;margin-bottom:8px;">&#128197; Submission Deadline</div>
       <div style="font-size:28px;font-weight:900;color:#78350f;margin-bottom:8px;line-height:1.2;">&#127942; ${escHtml(deadlineDisplay)}</div>
-      <div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning}</div>
-      <div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div></div>` : ''}
+<div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning}</div>
+      ${stage !== 3 ? `<div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div>` : ''}</div>` : ''}
     ${loginUrl ? `<div style="text-align:center;margin-bottom:28px;">
       <a href="${loginUrl}" style="display:inline-block;background:${btnColor};color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
   ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
-    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
+    <div style="background:${headerBg};border-radius:10px;padding:18px 20px;">
       <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
       ${helpPhone ? `
       <div style="font-size:13px;color:#e0e7ff;margin-bottom:6px;">&#128222; Helpline: <strong style="color:#ffffff;">${escHtml(helpPhone)}</strong></div>
