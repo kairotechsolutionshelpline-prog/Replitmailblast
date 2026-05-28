@@ -761,6 +761,20 @@
               <div class="field"><label>Recipient Email</label><input type="email" id="testToEmail" placeholder="you@example.com"></div>
               <div class="field"><label>Sender Name</label><input type="text" id="testSenderName" placeholder="MailBlast Test"></div>
             </div>
+            <div class="field">
+              <label>Email Template</label>
+              <select id="testTemplateSelect">
+                <option value="basic">Basic Test (no template)</option>
+                <option value="registration">Registration Confirmation</option>
+                <option value="reminder1">Reminder — Stage 1</option>
+                <option value="reminder2">Reminder — Stage 2</option>
+                <option value="reminder3">Reminder — Stage 3 (Final)</option>
+              </select>
+            </div>
+            <div id="testTemplatePreview" style="display:none;background:var(--s2);border:1px solid var(--bdr2);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;">
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx-h);margin-bottom:6px;">Subject Preview</div>
+              <div id="testTemplateSubject" style="font-size:13px;font-weight:600;color:var(--acc2);"></div>
+            </div>
             <button class="btn btn-primary btn-sm" id="testSendBtn" onclick="sendTestEmail()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               Send Test Email
@@ -2150,16 +2164,36 @@ async function testConn() {
   }
 }
 
+const testTemplateSubjects = {
+  basic:        'MailBlast Test Email',
+  registration: 'You have been registered successfully with [Company Name]',
+  reminder1:    'Reminder: Thank you for working with [Company Name]',
+  reminder2:    '2nd Reminder: Its Friendly Reminder — [Company Name]',
+  reminder3:    'Final Reminder: Deadline approaching — [Company Name]'
+};
+
+document.getElementById('testTemplateSelect')?.addEventListener('change', function() {
+  const preview = document.getElementById('testTemplatePreview');
+  const subjectEl = document.getElementById('testTemplateSubject');
+  if (this.value === 'basic') { preview.style.display = 'none'; return; }
+  subjectEl.textContent = testTemplateSubjects[this.value] || '';
+  preview.style.display = '';
+});
+
 async function sendTestEmail() {
-  const toEmail = document.getElementById('testToEmail').value.trim();
-  const senderName = document.getElementById('testSenderName').value.trim();
+  const toEmail    = document.getElementById('testToEmail').value.trim();
+  const senderName = document.getElementById('testSenderName').value.trim() || 'MailBlast Test';
+  const template   = document.getElementById('testTemplateSelect').value;
   const res = document.getElementById('testResult');
   const btn = document.getElementById('testSendBtn');
   if (!toEmail) { toast('Enter recipient email','err'); return; }
   btn.disabled=true; btn.textContent='Sending…';
   res.className='test-result'; res.textContent='';
   try {
-    const r = await fetch('/api/test-send', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify({ toEmail, senderName }) });
+    const r = await fetch('/api/test-send', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({ toEmail, senderName, template })
+    });
     const d = await r.json();
     res.className = `test-result ${d.ok?'ok':'err'}`;
     res.textContent = d.message;
