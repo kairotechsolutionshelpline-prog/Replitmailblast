@@ -1001,7 +1001,7 @@ async function runReminderBatch() {
     let logoUrl = process.env.LOGO_URL || null;
     if (!logoUrl && reminder.company_id) {
       const coRow = stmts.getCompany.get(reminder.company_id);
-      if (coRow?.logo_path) logoUrl = `${getBaseUrl(null)}/api/companies/${reminder.company_id}/logo`;
+      if (coRow?.logo_path) logoUrl = `${APP_BASE_URL}/api/companies/${reminder.company_id}/logo`;
     }
 
     // Note 7: Parse template variables in subject
@@ -1015,14 +1015,13 @@ async function runReminderBatch() {
       loginUrl:     reminder.login_url || ''
     };
 
-    const rawSubject = buildReminderSubject(nextStage, co.name, reminder.project_name);
-    const subject = parseTemplateVars(rawSubject, templateVars);
+    const subject = buildReminderSubject(nextStage, co.name);
     const unsubLink = buildUnsubscribeLink(reminder.member_email);
 
     try {
       const resend = new Resend(apiKey);
       const { error } = await resend.emails.send({
-        from: senderEmail,
+        from: `${co.name} <${senderEmail}>`,
         to: [reminder.member_email],
         subject,
         html: buildReminderEmail({
@@ -1145,17 +1144,15 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
 </table></td></tr></table></body></html>`;
 }
 
-// Note 7: buildReminderSubject supports {ProjectName} variable
-function buildReminderSubject(stage, companyName, projectName) {
-  const proj = projectName || companyName;
+// Note 7: buildReminderSubject uses company name
+function buildReminderSubject(stage, companyName) {
   const stages = [
     '',
-    `Reminder: Complete your registration with {ProjectName}`,
-    `2nd Reminder: Action required — {ProjectName}`,
-    `Final Notice: Deadline approaching — {ProjectName}`
+    `Reminder: Thank you for working with ${companyName}`,
+    `2nd Reminder: Its Friendly Reminder — ${companyName}`,
+    `Final Reminder: Deadline approaching — ${companyName}`
   ];
-  const raw = stages[stage] || `Reminder from {ProjectName}`;
-  return raw.replace(/\{ProjectName\}/gi, proj);
+  return stages[stage] || `Reminder from ${companyName}`;
 }
 
 function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, logoUrl, projectName, unsubscribeLink }) {
@@ -1165,9 +1162,9 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, 
 
   const stageMessages = [
     '',
-    `This is a friendly reminder that you have a pending action with <strong style="color:#1a3fa8;">${escHtml(proj)}</strong>. Please complete your submission at your earliest convenience.`,
-    `We noticed you haven't completed your action yet. This is your <strong>second reminder</strong> — please don't miss the upcoming deadline.`,
-    `<strong style="color:#dc2626;">This is your final notice.</strong> The deadline for your submission with <strong>${escHtml(proj)}</strong> is approaching. Please act immediately to avoid missing out.`
+    `This is a friendly reminder that you have a pending project work with <strong style="color:#1a3fa8;">${escHtml(co.name)}</strong>. Please complete your submission at your earliest convenience.`,
+    `We noticed you haven't completed your project as expected. This is your <strong>second reminder</strong> — please complete the work within time and with required accuracy.`,
+    `<strong style="color:#dc2626;">This is your final notice.</strong> The deadline for your submission with <strong>${escHtml(co.name)}</strong> is approaching. Please act immediately and finish your project.`
   ];
 
   const stageColors = ['', '#2563eb', '#d97706', '#dc2626'];
