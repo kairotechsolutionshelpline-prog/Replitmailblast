@@ -749,10 +749,9 @@ app.post('/api/send', requireAuth, async (req, res) => {
   emit({ type: 'done', sent, failed, duration, sender: fromAddr });
   res.end();
 });
-
 // ── Test send ─────────────────────────────────────────────────────────────────
 app.post('/api/test-send', requireAuth, async (req, res) => {
-  const { toEmail, senderName, fromEmail } = req.body;
+  const { toEmail, senderName, fromEmail, template } = req.body;
   const apiKey  = process.env.RESEND_API_KEY;
   const logoUrl = process.env.LOGO_URL || null;
 
@@ -762,27 +761,71 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
   if (!apiKey || !from) return res.json({ ok: false, message: 'Missing RESEND_API_KEY or no senders configured.' });
   if (!toEmail) return res.json({ ok: false, message: 'No recipient email provided' });
 
+  const co = { name: senderName || '[Company Name]', phone: '+91 98765 43210', address: '' };
+  const testMember = { name: 'Test User', email: toEmail };
+  const testDeadline = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+  const testLoginUrl = 'https://example.com/login';
+  const unsubLink = buildUnsubscribeLink(toEmail, req);
+  const initials = 'MB';
+
+  let subject, html;
+
+  if (template === 'registration') {
+    subject = `You have been registered successfully with ${co.name}`;
+    html = buildPosterEmail({
+      member: testMember, co, initials,
+      deadline: testDeadline, deadlineTime: '23:59',
+      loginUrl: testLoginUrl, helpPhone: '+91 98765 43210',
+      helpEmail: from, messageNote: 'This is a test email to preview your registration confirmation template.',
+      logoUrl, unsubscribeLink: unsubLink
+    });
+  } else if (template === 'reminder1') {
+    subject = buildReminderSubject(1, co.name);
+    html = buildReminderEmail({
+      member: testMember, co, stage: 1,
+      deadline: testDeadline, loginUrl: testLoginUrl,
+      helpEmail: from, logoUrl, projectName: '',
+      unsubscribeLink: unsubLink
+    });
+  } else if (template === 'reminder2') {
+    subject = buildReminderSubject(2, co.name);
+    html = buildReminderEmail({
+      member: testMember, co, stage: 2,
+      deadline: testDeadline, loginUrl: testLoginUrl,
+      helpEmail: from, logoUrl, projectName: '',
+      unsubscribeLink: unsubLink
+    });
+  } else if (template === 'reminder3') {
+    subject = buildReminderSubject(3, co.name);
+    html = buildReminderEmail({
+      member: testMember, co, stage: 3,
+      deadline: testDeadline, loginUrl: testLoginUrl,
+      helpEmail: from, logoUrl, projectName: '',
+      unsubscribeLink: unsubLink
+    });
+  } else {
+    subject = `✅ Test Email from MailBlast`;
+    html = buildPosterEmail({
+      member: testMember, co, initials,
+      deadline: testDeadline, deadlineTime: '23:59',
+      loginUrl: testLoginUrl, helpPhone: '+91 98765 43210',
+      helpEmail: from, messageNote: 'This is a basic test email.',
+      logoUrl, unsubscribeLink: unsubLink
+    });
+  }
+
   try {
     const resend = new Resend(apiKey);
-    const co = { name: senderName || 'MailBlast Test', phone: '+91 98765 43210', address: '' };
     const { error } = await resend.emails.send({
-      from: senderName ? `${senderName} <${from}>` : from,
+      from: `${co.name} <${from}>`,
       to: [toEmail],
-      subject: `✅ Test Email from MailBlast`,
-      html: buildPosterEmail({
-        member: { name: 'Test User', email: toEmail }, co, initials: 'MB',
-        deadline: new Date(Date.now() + 7*86400000).toISOString().split('T')[0],
-        deadlineTime: '23:59', loginUrl: 'https://example.com/login',
-        helpPhone: '+91 98765 43210', helpEmail: from,
-        messageNote: 'This is a test email to preview your template.', logoUrl,
-        unsubscribeLink: buildUnsubscribeLink(toEmail, req)
-      })
+      subject,
+      html
     });
     if (error) return res.json({ ok: false, message: error.message });
     res.json({ ok: true, message: `Test email sent from ${from} to ${toEmail}` });
   } catch (e) { res.json({ ok: false, message: e.message }); }
 });
-
 // ── Reminders API ─────────────────────────────────────────────────────────────
 app.get('/api/reminders', requireAuth, (req, res) => {
   res.json(stmts.allReminders.all());
