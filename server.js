@@ -648,14 +648,15 @@ app.post('/api/send', requireAuth, async (req, res) => {
   if (!members?.length) return res.status(400).json({ error: 'No members provided' });
 
   const apiKey  = process.env.RESEND_API_KEY;
-  let logoUrl = process.env.LOGO_URL || null;
-  if (!logoUrl && coRow?.logo_path) logoUrl = `${getBaseUrl(req)}/api/companies/${company.id}/logo`;
 
   if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not set.' });
 
   if (!company?.id) return res.status(400).json({ error: 'No company selected. Please select a company before sending.' });
   const coRow = stmts.getCompany.get(company.id);
   if (!coRow) return res.status(400).json({ error: 'Selected company not found. Please select a valid company.' });
+
+  let logoUrl = process.env.LOGO_URL || null;
+  if (!logoUrl && coRow?.logo_path) logoUrl = `${getBaseUrl(req)}/api/companies/${company.id}/logo`;
 
   const companyHelpPhone  = coRow.phone      || '';
   const companyHelpEmail  = coRow.help_email || '';
@@ -1265,14 +1266,14 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
     ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700;margin-bottom:8px;">&#128197; Submission Deadline</div>
       <div style="font-size:28px;font-weight:900;color:#78350f;margin-bottom:8px;line-height:1.2;">&#127942; ${escHtml(deadlineDisplay)}</div>
-<div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning} &mdash; ${escHtml(timeDisplay)}</div>
+<div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning}</div>
       <div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div>
       </div>` : ''}
     ${loginUrl ? `<div style="text-align:center;margin-bottom:28px;">
       <a href="${loginUrl}" style="display:inline-block;background:#1a3fa8;color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
   ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
-    <div style="background:${headerBg};border-radius:10px;padding:18px 20px;">
+        <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
       <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
       ${helpPhone ? `
       <div style="font-size:13px;color:#e0e7ff;margin-bottom:6px;">&#128222; Helpline: <strong style="color:#ffffff;">${escHtml(helpPhone)}</strong></div>
@@ -1293,17 +1294,8 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
   </td></tr>
 </table></td></tr></table></body></html>`;
 }
-
-function buildReminderSubject(stage, companyName) {
-  const stages = [
-    '',
-    `Reminder: Thank you for working with ${companyName}`,
-    `2nd Reminder: Its Friendly Reminder — ${companyName}`,
-    `Final Reminder: Deadline approaching — ${companyName}`
-  ];
-  return stages[stage] || `Reminder from ${companyName}`;
-}
-// ── Start ─────────────────────────────────────────────────────────────────────console.log('=== MailBlast v4.0 Starting ===');
+// ── Start ─────────────────────────────────────────────────────────────────────
+console.log('=== MailBlast v4.0 Starting ===');
 console.log('PORT:', PORT);
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('DATA_DIR:', DATA_DIR);
