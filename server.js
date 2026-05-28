@@ -201,8 +201,8 @@ const stmts = {
   setReminderComplete: db.prepare('UPDATE reminders SET is_completed=1 WHERE id=?'),
   setReminderDoNotSend: db.prepare('UPDATE reminders SET do_not_send=1 WHERE member_email=?'),
   delReminder:   db.prepare('DELETE FROM reminders WHERE id=?'),
-  pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as company_phone,
-                                c.help_email as company_help_email
+pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as company_phone,
+                                c.help_email as company_help_email, c.note as company_note
                                 FROM reminders r
                                 LEFT JOIN companies c ON r.company_id=c.id
                                 WHERE r.is_completed=0
@@ -779,21 +779,32 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
       helpEmail: from, messageNote: 'This is a test email to preview your registration confirmation template.',
       logoUrl, unsubscribeLink: unsubLink
     });
-  } else if (template === 'reminder1') {
+} else if (template === 'reminder1') {
     subject = buildReminderSubject(1, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 1,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpEmail: from, logoUrl, projectName: '',
-      unsubscribeLink: unsubLink
+      helpPhone: '+91 98765 43210', helpEmail: from,
+      noteText: 'This is a sample note from company settings.',
+      logoUrl, projectName: '', unsubscribeLink: unsubLink
     });
   } else if (template === 'reminder2') {
     subject = buildReminderSubject(2, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 2,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpEmail: from, logoUrl, projectName: '',
-      unsubscribeLink: unsubLink
+      helpPhone: '+91 98765 43210', helpEmail: from,
+      noteText: 'This is a sample note from company settings.',
+      logoUrl, projectName: '', unsubscribeLink: unsubLink
+    });
+  } else if (template === 'reminder3') {
+    subject = buildReminderSubject(3, co.name);
+    html = buildReminderEmail({
+      member: testMember, co, stage: 3,
+      deadline: testDeadline, loginUrl: testLoginUrl,
+      helpPhone: '+91 98765 43210', helpEmail: from,
+      noteText: 'This is a sample note from company settings.',
+      logoUrl, projectName: '', unsubscribeLink: unsubLink
     });
   } else if (template === 'reminder3') {
     subject = buildReminderSubject(3, co.name);
@@ -1066,7 +1077,9 @@ async function runReminderBatch() {
           co, stage: nextStage,
           deadline: reminder.deadline,
           loginUrl: reminder.login_url || '',
+          helpPhone: reminder.company_phone || '',
           helpEmail: reminder.company_help_email || '',
+          noteText: reminder.company_note || '',
           logoUrl,
           projectName: reminder.project_name || '',
           unsubscribeLink: unsubLink
@@ -1193,10 +1206,9 @@ function buildReminderSubject(stage, companyName) {
   return stages[stage] || `Reminder from ${companyName}`;
 }
 
-function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, logoUrl, projectName, unsubscribeLink }) {
+function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, helpEmail, noteText, logoUrl, projectName, unsubscribeLink }) {
   const deadlineDisplay = deadline ? formatDeadlineDate(deadline) : null;
   const initials = (co.name || 'C').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  const proj = projectName || co.name;
 
   const stageMessages = [
     '',
@@ -1205,17 +1217,25 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, 
     `<strong style="color:#dc2626;">This is your final notice.</strong> The deadline for your submission with <strong>${escHtml(co.name)}</strong> is approaching. Please act immediately and finish your project.`
   ];
 
-  const stageColors = ['', '#2563eb', '#d97706', '#dc2626'];
-  const stageLabels = ['', 'Reminder', '2nd Reminder', 'Final Notice'];
+  const stageBadgeColor = stage === 3 ? '#fecaca' : stage === 2 ? '#fde68a' : '#dcfce7';
+  const stageBadgeText  = stage === 3 ? '#991b1b' : stage === 2 ? '#92400e' : '#166534';
+  const stageBadgeBorder= stage === 3 ? '#fca5a5' : stage === 2 ? '#fcd34d' : '#bbf7d0';
+  const stageBadgeLabel = stage === 3 ? '⚠ Final Notice' : stage === 2 ? '⏰ 2nd Reminder' : '🔔 Reminder';
+  const stageLabels     = ['', 'Reminder', '2nd Reminder', 'Final Notice'];
+  const headerBg        = stage === 3 ? '#7f1d1d' : stage === 2 ? '#92400e' : '#1a3fa8';
+  const btnColor        = stage === 3 ? '#dc2626' : stage === 2 ? '#d97706' : '#1a3fa8';
+
+  const deadlineWarning = stage === 3
+    ? 'Finish your project by today midnight — 11:59'
+    : 'Please complete your submission by the previous night — 23:59';
 
   const logoBlock = logoUrl
     ? `<td style="padding-right:14px;"><img src="${escHtml(logoUrl)}" alt="${escHtml(co.name)}" width="48" height="48" style="width:48px;height:48px;border-radius:10px;object-fit:contain;display:block;border:1.5px solid rgba(255,255,255,0.25);"></td>`
     : `<td style="width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:10px;text-align:center;vertical-align:middle;border:1.5px solid rgba(255,255,255,0.25);">
          <span style="color:white;font-family:Arial,sans-serif;font-weight:900;font-size:15px;">${initials}</span></td>`;
 
-  const headerBg = stage === 3 ? '#7f1d1d' : stage === 2 ? '#92400e' : '#1a3fa8';
-
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(stageLabels[stage])}</title></head>
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escHtml(stageLabels[stage])}</title></head>
 <body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:16px;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:24px 8px;"><tr><td align="center">
 <table cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);max-width:600px;width:100%;">
@@ -1223,23 +1243,49 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpEmail, 
     <table cellpadding="0" cellspacing="0" width="100%"><tr>
       ${logoBlock}
       <td style="padding-left:14px;">
-        <div style="color:white;font-size:19px;font-weight:700;">${escHtml(co.name)}</div>
+        <div style="color:white;font-size:19px;font-weight:700;letter-spacing:-0.3px;">${escHtml(co.name)}</div>
         <div style="color:rgba(255,255,255,0.6);font-size:10px;margin-top:3px;letter-spacing:1.5px;text-transform:uppercase;">${escHtml(stageLabels[stage])}</div>
       </td>
     </tr></table>
   </td></tr>
-  <tr><td style="padding:24px 24px;">
+  <tr><td style="padding:24px 24px 0;">
     <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;font-weight:500;">Dear ${escHtml(member.name || 'Member')},</p>
-    <p style="font-size:14px;color:#374151;line-height:1.75;margin-bottom:20px;">${stageMessages[stage]}</p>
-    ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
-      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700;margin-bottom:6px;">&#128197; Deadline</div>
-      <div style="font-size:24px;font-weight:900;color:#78350f;">${escHtml(deadlineDisplay)}</div></div>` : ''}
-    ${loginUrl ? `<div style="text-align:center;margin-bottom:20px;">
-      <a href="${loginUrl}" style="display:inline-block;background:${stageColors[stage]};color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Complete Your Action</a></div>` : ''}
-    ${helpEmail ? `<p style="font-size:12px;color:#6b7280;">Questions? Email us at <a href="mailto:${escHtml(helpEmail)}" style="color:#2563eb;">${escHtml(helpEmail)}</a></p>` : ''}
+    <div style="background:${stageBadgeColor};color:${stageBadgeText};padding:9px 18px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:18px;border:1px solid ${stageBadgeBorder};display:inline-block;">${stageBadgeLabel}</div>
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.75;">${stageMessages[stage]}</p>
+    ${noteText ? `<div style="background:#f0f7ff;border-left:3px solid #2563eb;padding:13px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:6px;letter-spacing:0.3px;">NOTE</div>
+      <div style="font-size:13px;color:#374151;line-height:1.7;">${escHtml(noteText).replace(/\n/g,'<br>')}</div></div>` : ''}
+    ${loginUrl ? `<div style="background:#f8fafc;border-radius:8px;padding:16px 20px;margin-bottom:20px;border:1px solid #e5e7eb;">
+      <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;font-weight:700;margin-bottom:12px;">Your Login Credentials</div>
+      <table cellpadding="0" cellspacing="0">
+        <tr><td style="padding-bottom:9px;font-size:13px;color:#374151;">&#128279; Login: &nbsp;<a href="${loginUrl}" style="color:#2563eb;font-weight:600;text-decoration:none;">Click here to login</a></td></tr>
+        <tr><td style="padding-bottom:9px;font-size:13px;color:#374151;">&#128231; Username: &nbsp;<strong>${escHtml(member.email)}</strong></td></tr>
+        <tr><td style="font-size:13px;color:#374151;">&#128273; Password: &nbsp;<strong>Your Phone Number</strong></td></tr>
+      </table></div>` : ''}
+    ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
+      <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700;margin-bottom:8px;">&#128197; Submission Deadline</div>
+      <div style="font-size:28px;font-weight:900;color:#78350f;margin-bottom:8px;line-height:1.2;">&#127942; ${escHtml(deadlineDisplay)}</div>
+      <div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning}</div>
+      <div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div></div>` : ''}
+    ${loginUrl ? `<div style="text-align:center;margin-bottom:28px;">
+      <a href="${loginUrl}" style="display:inline-block;background:${btnColor};color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
+  ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
+    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
+      <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
+      ${helpPhone ? `
+      <div style="font-size:13px;color:#e0e7ff;margin-bottom:6px;">&#128222; Helpline: <strong style="color:#ffffff;">${escHtml(helpPhone)}</strong></div>
+      <div style="font-size:12px;color:#93c5fd;margin-bottom:8px;">&#128336; Available: Mon–Sat, 10:00 AM – 6:00 PM IST</div>
+      <div style="background:rgba(255,255,255,0.1);border:1px solid rgba(248,113,113,0.5);border-radius:7px;padding:9px 13px;margin-bottom:10px;display:inline-block;">
+        <span style="font-size:12px;color:#fca5a5;">&#128308; If your call is not answered, please send a missed call — we will call you back.</span>
+      </div>` : ''}
+      ${helpEmail ? `
+      <div style="font-size:13px;color:#e0e7ff;margin-bottom:4px;">&#9993;&#65039; Or reply to this email for support</div>
+      <div style="font-size:12px;color:#93c5fd;">You can also email us at: <a href="mailto:${escHtml(helpEmail)}" style="color:#bfdbfe;text-decoration:underline;">${escHtml(helpEmail)}</a></div>` : ''}
+    </div>
+  </td></tr>` : ''}
   <tr><td style="background:#f8f9fa;padding:14px 24px;border-top:1px solid #e5e7eb;text-align:center;">
-    <p style="margin:0 0 5px;font-size:12px;color:#9ca3af;">Sent by ${escHtml(co.name)} via MailBlast</p>
+    <p style="margin:0 0 6px;font-size:12.5px;color:#6b7280;">Warm regards,<br><strong style="color:#374151;">${escHtml(co.name)} Team</strong></p>
     ${unsubscribeLink ? `<p style="margin:0;font-size:10.5px;color:#9ca3af;">
       <a href="${escHtml(unsubscribeLink)}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe from future emails</a>
     </p>` : ''}
