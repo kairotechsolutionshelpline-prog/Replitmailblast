@@ -1433,12 +1433,10 @@ function openSenderModal() {
 }
 
 // Live preview of bulk prefixes
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('senderPrefixBulk')?.addEventListener('input', function() {
-    const lines = this.value.split('\n').map(l => l.trim().toLowerCase()).filter(Boolean).slice(0, 20);
-    document.getElementById('senderBulkPreview').textContent =
-      lines.length ? lines.map(p => `→ ${p}@redalertsol.com`).join('  |  ') : '';
-  });
+document.getElementById('senderPrefixBulk')?.addEventListener('input', function() {
+  const lines = this.value.split('\n').map(l => l.trim().toLowerCase()).filter(Boolean).slice(0, 20);
+  document.getElementById('senderBulkPreview').textContent =
+    lines.length ? lines.map(p => `→ ${p}@redalertsol.com`).join('  |  ') : '';
 });
 
 function closeSenderModal() { document.getElementById('senderModal').classList.remove('open'); }
@@ -1517,10 +1515,8 @@ function confirmSend() {
 }
 function closeConfirm() { document.getElementById('confirmModal').classList.remove('open'); }
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('addToRemindersToggle')?.addEventListener('change', function() {
-    document.getElementById('reminderExtraFields').style.display = this.checked ? '' : 'none';
-  });
+document.getElementById('addToRemindersToggle')?.addEventListener('change', function() {
+  document.getElementById('reminderExtraFields').style.display = this.checked ? '' : 'none';
 });
 
 async function startSend() {
