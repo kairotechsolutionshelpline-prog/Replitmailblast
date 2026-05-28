@@ -196,7 +196,7 @@ const stmts = {
   getReminderByEmail: db.prepare('SELECT * FROM reminders WHERE member_email = ? LIMIT 1'),
   insReminder:   db.prepare(`INSERT INTO reminders
                              (member_email,member_name,company_id,stage,is_completed,deadline,login_url,batch_name,project_name)
-                             VALUES (?,?,?,0,0,?,?,?,?)`),
+                             VALUES (?,?,?,?,0,?,?,?,?)`),
   updReminderStage: db.prepare('UPDATE reminders SET stage=?,last_sent_at=datetime(\'now\') WHERE id=?'),
   setReminderComplete: db.prepare('UPDATE reminders SET is_completed=1 WHERE id=?'),
   setReminderDoNotSend: db.prepare('UPDATE reminders SET do_not_send=1 WHERE member_email=?'),
@@ -207,8 +207,8 @@ pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as com
                                 LEFT JOIN companies c ON r.company_id=c.id
                                 WHERE r.is_completed=0
                                 AND r.do_not_send=0
-                                AND (r.deadline IS NULL OR date(r.deadline) >= date('now'))
-                                AND r.stage < 3
+                                AND (r.deadline IS NULL OR date(r.deadline) > date('now'))
+                                AND r.stage < 5
                                 AND r.member_email NOT IN (SELECT email FROM unsubscribers)
                                 ORDER BY r.stage ASC, r.last_sent_at ASC`),
 
@@ -307,6 +307,22 @@ function getBaseUrl(req) {
 }
 function buildUnsubscribeLink(email, req) {
   return `${getBaseUrl(req)}/unsubscribe?token=${emailToToken(email)}`;
+}
+
+// ── Late-join stage calculator ────────────────────────────────────────────────
+function calcStartingStage(deadlineStr) {
+  if (!deadlineStr) return 0;
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const [y, m, d] = deadlineStr.split('-').map(Number);
+  const deadline = new Date(y, m - 1, d);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysLeft = Math.round((deadline - today) / (1000 * 60 * 60 * 24));
+  const hour = now.getHours();
+
+  if (daysLeft <= 0) return -1; // past or on deadline — block
+  if (daysLeft === 1) return hour >= 9 ? 4 : 3;  // 31-05
+  if (daysLeft === 2) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1; // 30-05
+  return hour >= 21 ? 1 : 0; // 3+ days left — Day 1
 }
 
 // ── Campaign pause/resume tracking ───────────────────────────────────────────
@@ -479,8 +495,13 @@ app.post('/api/senders', requireAuth, (req, res) => {
   const { prefix, domain } = req.body;
   if (!prefix || !domain) return res.status(400).json({ error: 'Prefix and domain required' });
   try {
-    const info = stmts.insSender.run(prefix.trim().toLowerCase(), domain.trim().toLowerCase());
-    res.json({ ok: true, id: info.lastInsertRowid });
+    const startStage = calcStartingStage(deadline);
+  if (startStage === -1) return res.status(400).json({ error: 'Deadline has already passed.' });
+  const info = stmts.insReminder.run(
+    memberEmail, memberName, companyId || null,
+    deadline || null, loginUrl, batchName, projectName, startStage
+  );
+  res.json({ ok: true, id: info.lastInsertRowid });
   } catch (e) {
     if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Sender already exists' });
     res.status(500).json({ error: e.message });
@@ -815,6 +836,22 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
       helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
       unsubscribeLink: unsubLink
     });
+  } else if (template === 'reminder4') {
+    subject = buildReminderSubject(4, co.name);
+    html = buildReminderEmail({
+      member: testMember, co, stage: 4,
+      deadline: testDeadline, loginUrl: testLoginUrl,
+      helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
+      unsubscribeLink: unsubLink
+    });
+  } else if (template === 'reminder5') {
+    subject = buildReminderSubject(5, co.name);
+    html = buildReminderEmail({
+      member: testMember, co, stage: 5,
+      deadline: testDeadline, loginUrl: testLoginUrl,
+      helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
+      unsubscribeLink: unsubLink
+    });
   } else {
     subject = `✅ Test Email from MailBlast`;
     html = buildPosterEmail({
@@ -884,9 +921,11 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
       if (!m.email) { skipped++; continue; }
       const existing = stmts.getReminderByEmail.get(m.email);
       if (existing) { skipped++; continue; }
+      const startStage = calcStartingStage(deadline);
+      if (startStage === -1) { skipped++; continue; }
       stmts.insReminder.run(
         m.email, m.name || '', companyId || null,
-        deadline || null, loginUrl, batchName, projectName
+        startStage, deadline || null, loginUrl, batchName, projectName
       );
       added++;
     }
@@ -1078,7 +1117,7 @@ const subject = buildReminderSubject(nextStage, co.name);
       if (error) throw new Error(error.message);
 
        stmts.updReminderStage.run(nextStage, reminder.id);
-      if (nextStage === 3) stmts.setReminderComplete.run(reminder.id);
+      if (nextStage === 5) stmts.setReminderComplete.run(reminder.id);
       stmts.insReminderLog.run(reminder.member_email, subject, 'success', '', nextStage, senderEmail);
       console.log(`[Reminder] Sent stage ${nextStage} to ${reminder.member_email}`);
     } catch (e) {
@@ -1186,9 +1225,11 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
 function buildReminderSubject(stage, companyName) {
   const stages = [
     '',
-    `Reminder: Thank you for working with ${companyName}`,
-    `2nd Reminder: Its Friendly Reminder — ${companyName}`,
-    `Final Reminder: Deadline approaching — ${companyName}`
+    `🔔 Reminder: You have been registered with ${companyName}`,
+    `⏰ 2nd Reminder: Please complete your pending work — ${companyName}`,
+    `📢 3rd Reminder: Your submission is still pending — ${companyName}`,
+    `⚠️ 4th Reminder: Urgent — Action required — ${companyName}`,
+    `🚨 Final Reminder: Deadline approaching — ${companyName}`
   ];
   return stages[stage] || `Reminder from ${companyName}`;
 }
@@ -1199,19 +1240,23 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
 
   const stageMessages = [
     '',
-    `This is a friendly reminder that you have a pending project work with <strong style="color:#1a3fa8;">${escHtml(co.name)}</strong>. Please complete your submission at your earliest convenience.`,
-    `We noticed you haven't completed your project as expected. This is your <strong>second reminder</strong> — please complete the work within time and with required accuracy.`,
-    `<strong style="color:#dc2626;">This is your final notice.</strong> The deadline for your submission with <strong>${escHtml(co.name)}</strong> is approaching. Please act immediately and finish your project.`
+    const stageMessages = [
+    '',
+    `This is a friendly reminder that you have pending project work with <strong style="color:#166534;">${escHtml(co.name)}</strong>. Please complete your submission at your earliest convenience.`,
+    `We noticed your project is still pending. This is your <strong>2nd reminder</strong> — please complete your work on time and with required accuracy.`,
+    `Your submission is still pending with <strong style="color:#6b21a8;">${escHtml(co.name)}</strong>. This is your <strong>3rd reminder</strong> — please log in and complete your work immediately.`,
+    `We have not received your submission yet. This is an <strong>urgent 4th reminder</strong> — please complete your project without any further delay.`,
+    `<strong style="color:#dc2626;">This is your Final Reminder.</strong> The deadline for your submission with <strong>${escHtml(co.name)}</strong> is today. Please act immediately — no further reminders will be sent after this.`
   ];
 
-  const stageBadgeColor = stage === 3 ? '#fecaca' : stage === 2 ? '#fde68a' : '#dcfce7';
-  const stageBadgeText  = stage === 3 ? '#991b1b' : stage === 2 ? '#92400e' : '#166534';
-  const stageBadgeBorder= stage === 3 ? '#fca5a5' : stage === 2 ? '#fcd34d' : '#bbf7d0';
-  const stageBadgeLabel = stage === 3 ? '⚠ Final Notice' : stage === 2 ? '⏰ 2nd Reminder' : '🔔 Reminder';
-  const stageLabels     = ['', 'Reminder', '2nd Reminder', 'Final Notice'];
-  const headerBg        = stage === 3 ? '#7f1d1d' : stage === 2 ? '#92400e' : '#1a3fa8';
+  const stageBadgeColor  = stage === 5 ? '#fecaca' : stage === 4 ? '#fde68a' : stage === 3 ? '#ede9fe' : stage === 2 ? '#ccfbf1' : '#dcfce7';
+  const stageBadgeText   = stage === 5 ? '#991b1b' : stage === 4 ? '#92400e' : stage === 3 ? '#6b21a8' : stage === 2 ? '#0f766e' : '#166534';
+  const stageBadgeBorder = stage === 5 ? '#fca5a5' : stage === 4 ? '#fcd34d' : stage === 3 ? '#ddd6fe' : stage === 2 ? '#99f6e4' : '#bbf7d0';
+  const stageBadgeLabel  = stage === 5 ? '🚨 Final Reminder' : stage === 4 ? '⚠️ 4th Reminder' : stage === 3 ? '📢 3rd Reminder' : stage === 2 ? '⏰ 2nd Reminder' : '🔔 Reminder';
+  const stageLabels      = ['', 'Reminder', '2nd Reminder', '3rd Reminder', '4th Reminder', 'Final Reminder'];
+  const headerBg         = stage === 5 ? '#7f1d1d' : stage === 4 ? '#92400e' : stage === 3 ? '#4c1d95' : stage === 2 ? '#0f766e' : '#166534';
 
-  const deadlineWarning = stage === 3
+  const deadlineWarning = stage === 5
     ? 'Finish your project by today midnight — 11:59'
     : 'Please complete your submission by the previous night — 23:59';
 
