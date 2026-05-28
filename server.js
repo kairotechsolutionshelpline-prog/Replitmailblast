@@ -1166,11 +1166,13 @@ function buildPosterEmail({ member, co, initials, deadline, deadlineTime, loginU
     ${deadlineDisplay ? `<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700;margin-bottom:8px;">&#128197; Submission Deadline</div>
       <div style="font-size:28px;font-weight:900;color:#78350f;margin-bottom:8px;line-height:1.2;">&#127942; ${escHtml(deadlineDisplay)}</div>
-<div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning}</div>
-<div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div></div>` : ''}    ${loginUrl ? `<div style="text-align:center;margin-bottom:28px;">
-      <a href="${loginUrl}" style="display:inline-block;background:${btnColor};color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
+<div style="font-size:12.5px;color:#92400e;margin-bottom:4px;font-weight:600;">&#9888;&#65039; ${deadlineWarning} &mdash; ${escHtml(timeDisplay)}</div>
+<div style="font-size:11.5px;color:#b45309;">The deadline day is for verification, not submission.</div></div>` : ''}
+    ${loginUrl ? `<div style="text-align:center;margin-bottom:28px;">
+      <a href="${loginUrl}" style="display:inline-block;background:#1a3fa8;color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
   ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
+    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
     <div style="background:${headerBg};border-radius:10px;padding:18px 20px;">
       <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
       ${helpPhone ? `
