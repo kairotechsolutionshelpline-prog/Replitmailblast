@@ -1270,8 +1270,7 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
       <a href="${loginUrl}" style="display:inline-block;background:#1a3fa8;color:white;padding:13px 40px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;">&#128279; Go to Login Page</a></div>` : ''}
   </td></tr>
   ${(helpPhone || helpEmail) ? `<tr><td style="padding:0 24px 24px;">
-    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
-    <div style="background:#1a3fa8;border-radius:10px;padding:18px 20px;">
+    <div style="background:${headerBg};border-radius:10px;padding:18px 20px;">
       <div style="font-size:14px;font-weight:800;color:#ffffff;margin-bottom:12px;">&#127775; Need Help?</div>
       ${helpPhone ? `
       <div style="font-size:13px;color:#e0e7ff;margin-bottom:6px;">&#128222; Helpline: <strong style="color:#ffffff;">${escHtml(helpPhone)}</strong></div>
