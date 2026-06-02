@@ -1240,7 +1240,6 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
 
   const stageMessages = [
     '',
-    const stageMessages = [
     '',
     `This is a friendly reminder that you have pending project work with <strong style="color:#166534;">${escHtml(co.name)}</strong>. Please complete your submission at your earliest convenience.`,
     `We noticed your project is still pending. This is your <strong>2nd reminder</strong> — please complete your work on time and with required accuracy.`,
