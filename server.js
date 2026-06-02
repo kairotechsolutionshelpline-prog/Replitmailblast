@@ -27,6 +27,15 @@ if (!process.env.SESSION_SECRET) {
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const LOGOS_DIR = path.join(DATA_DIR, 'logos');
+
+// Auto-create backup directory
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+console.log('[MailBlast] DATA_DIR:', DATA_DIR);
+console.log('[MailBlast] BACKUP_DIR:', BACKUP_DIR);
+
+
 if (!fs.existsSync(LOGOS_DIR)) fs.mkdirSync(LOGOS_DIR, { recursive: true });
 
 // ── SQLite setup ──────────────────────────────────────────────────────────────
