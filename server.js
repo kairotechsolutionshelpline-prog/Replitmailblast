@@ -900,14 +900,16 @@ app.post('/api/reminders', requireAuth, (req, res) => {
   if (!memberEmail) return res.status(400).json({ error: 'Member email required' });
   const existing = stmts.getReminderByEmail.get(memberEmail);
   if (existing) return res.status(409).json({ error: 'Reminder already exists for this email' });
-  const info = stmts.insReminder.run(
-    memberEmail, memberName, companyId || null,
-    deadline || null, loginUrl, batchName, projectName
-  );
+  const startStage = calcStartingStage(deadline);
+  const startStage = calcStartingStage(deadline);
+  stmts.insReminder.run(
+        m.email, m.name || '', companyId || null,
+        startStage, deadline || null, loginUrl, batchName, projectName
+      );
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
-app.put('/api/reminders/:id/complete', requireAuth, (req, res) => {
+app.put('/api/reminders/:id/complete'', requireAuth, (req, res) => {
   stmts.setReminderComplete.run(req.params.id);
   res.json({ ok: true });
 });
@@ -935,8 +937,9 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
       const startStage = calcStartingStage(deadline);
       if (startStage === -1) { skipped++; continue; }
       stmts.insReminder.run(
+        stmts.insReminder.run(
         m.email, m.name || '', companyId || null,
-        startStage, deadline || null, loginUrl, batchName, projectName
+        startStage, 0, deadline || null, loginUrl, batchName, projectName
       );
       added++;
     }
