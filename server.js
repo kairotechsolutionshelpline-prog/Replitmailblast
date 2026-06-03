@@ -6,6 +6,7 @@ const bcrypt       = require('bcryptjs');
 const rateLimit    = require('express-rate-limit');
 const path         = require('path');
 const fs           = require('fs');
+const crypto       = require('crypto');
 const { Resend }   = require('resend');
 const Database     = require('better-sqlite3');
 const cron         = require('node-cron');
@@ -432,7 +433,7 @@ app.get('/api/companies', requireAuth, (req, res) => {
 app.post('/api/companies', requireAuth, (req, res) => {
   const { name, phone='', replyTo='', loginUrl='', helpEmail='', note='', address='' } = req.body;
   if (!name) return res.status(400).json({ error: 'Company name required' });
-  const id = Date.now().toString();
+  const id = crypto.randomUUID();
   stmts.insCompany.run(id, name, phone, replyTo, loginUrl, helpEmail, note, address);
   res.json({ ok: true, company: { id, name, phone, replyTo, loginUrl, helpEmail, note, address } });
 });
@@ -719,6 +720,7 @@ app.post('/api/send', requireAuth, async (req, res) => {
   req.on('close', () => { controller.abort(); campaignPaused.delete(cid); });
   emit({ type: 'start', total: members.length, sender: fromAddr, campaignId: cid });
 
+  try {
   for (let i = 0; i < members.length; i++) {
     if (controller.signal.aborted) break;
 
@@ -744,7 +746,7 @@ app.post('/api/send', requireAuth, async (req, res) => {
     const unsubLink = buildUnsubscribeLink(member.email, req);
 
     try {
-      const { error } = await resend.emails.send({
+      const sendPromise = resend.emails.send({
         from: displayFrom,
         to: [member.email],
         subject,
@@ -758,6 +760,10 @@ app.post('/api/send', requireAuth, async (req, res) => {
         }),
         ...(replyTo ? { reply_to: replyTo } : {})
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Send timeout after 30s')), 30000)
+      );
+      const { error } = await Promise.race([sendPromise, timeoutPromise]);
       if (error) throw new Error(error.message || JSON.stringify(error));
       sent++;
       results.push({ name: member.name, email: member.email, status: 'sent' });
@@ -772,8 +778,9 @@ app.post('/api/send', requireAuth, async (req, res) => {
       await sleep(jitter(1800, 2500));
     }
   }
-
-  campaignPaused.delete(cid);
+  } finally {
+    campaignPaused.delete(cid);
+  }
   const duration = Math.round((Date.now() - startTime) / 1000);
 
   if (!controller.signal.aborted) {
@@ -895,9 +902,11 @@ app.post('/api/reminders', requireAuth, (req, res) => {
   if (!memberEmail) return res.status(400).json({ error: 'Member email required' });
   const existing = stmts.getReminderByEmail.get(memberEmail);
   if (existing) return res.status(409).json({ error: 'Reminder already exists for this email' });
+  const rawStage = calcStartingStage(deadline);
+  const startStage = rawStage === -1 ? 0 : rawStage;
   const info = stmts.insReminder.run(
     memberEmail, memberName, companyId || null,
-    calcStartingStage(deadline), deadline || null, loginUrl, batchName, projectName
+    startStage, deadline || null, loginUrl, batchName, projectName
   );
   res.json({ ok: true, id: info.lastInsertRowid });
 });
@@ -921,12 +930,20 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
   } = req.body;
   if (!members?.length) return res.status(400).json({ error: 'No members provided' });
 
+  // Batch-check which emails already exist to avoid N+1 queries
+  const incomingEmails = members.map(m => m.email).filter(Boolean);
+  const placeholders = incomingEmails.map(() => '?').join(',');
+  const existingSet = new Set(
+    incomingEmails.length
+      ? db.prepare(`SELECT member_email FROM reminders WHERE member_email IN (${placeholders})`).all(...incomingEmails).map(r => r.member_email)
+      : []
+  );
+
   let added = 0, skipped = 0;
   const tx = db.transaction(() => {
     for (const m of members) {
       if (!m.email) { skipped++; continue; }
-      const existing = stmts.getReminderByEmail.get(m.email);
-      if (existing) { skipped++; continue; }
+      if (existingSet.has(m.email)) { skipped++; continue; }
       const rawStage = calcStartingStage(deadline);
       const startStage = rawStage === -1 ? 0 : rawStage;
       stmts.insReminder.run(
@@ -1017,11 +1034,15 @@ app.post('/api/custom-mail/send', requireAuth, async (req, res) => {
 
     try {
       const resend = new Resend(apiKey);
-      const { error } = await resend.emails.send({
+      const sendPromise = resend.emails.send({
         from: displayFrom, to: [to], subject,
         html: cleanHtml,
         ...(replyTo ? { reply_to: replyTo } : {})
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Send timeout after 30s')), 30000)
+      );
+      const { error } = await Promise.race([sendPromise, timeoutPromise]);
       if (error) throw new Error(error.message);
       sent++;
       emit({ type: 'progress', index: i+1, total: recipients.length, sent, failed, email: to, status: 'ok' });
@@ -1248,9 +1269,22 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
   const deadlineDisplay = deadline ? formatDeadlineDate(deadline) : null;
   const initials = (co.name || 'C').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
+  // Apply variable substitution to dynamic text fields
+  const templateVars = {
+    firstName:    (member.name || 'Member').split(' ')[0],
+    memberName:   member.name || 'Member',
+    projectName:  projectName || '',
+    deadlineDate: deadlineDisplay || '',
+    companyName:  co.name || '',
+    email:        member.email || '',
+    loginUrl:     loginUrl || ''
+  };
+  const resolvedNote        = noteText    ? parseTemplateVars(noteText, templateVars)    : '';
+  const resolvedProjectName = projectName ? parseTemplateVars(projectName, templateVars) : '';
+
   const stageMessages = [
     '',
-    '',
+    `This is a reminder that you have been registered with <strong style="color:#166534;">${escHtml(co.name)}</strong>. Please log in and complete your pending project work at your earliest convenience.`,
     `This is a friendly reminder that you have pending project work with <strong style="color:#166534;">${escHtml(co.name)}</strong>. Please complete your submission at your earliest convenience.`,
     `We noticed your project is still pending. This is your <strong>2nd reminder</strong> — please complete your work on time and with required accuracy.`,
     `Your submission is still pending with <strong style="color:#6b21a8;">${escHtml(co.name)}</strong>. This is your <strong>3rd reminder</strong> — please log in and complete your work immediately.`,
@@ -1292,12 +1326,12 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
     <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;font-weight:500;">Dear ${escHtml(member.name || 'Member')},</p>
     <div style="background:${stageBadgeColor};color:${stageBadgeText};padding:9px 18px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:18px;border:1px solid ${stageBadgeBorder};display:inline-block;">${stageBadgeLabel}</div>
     <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.75;">${stageMessages[stage]}</p>
-    ${projectName ? `<div style="background:#f0f7ff;border-left:3px solid #1a3fa8;padding:10px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;">
+    ${resolvedProjectName ? `<div style="background:#f0f7ff;border-left:3px solid #1a3fa8;padding:10px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;">
       <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:4px;letter-spacing:0.3px;">PROJECT</div>
-      <div style="font-size:13px;color:#374151;font-weight:600;">${escHtml(projectName)}</div></div>` : ''}
-    ${noteText ? `<div style="background:#f0f7ff;border-left:3px solid #2563eb;padding:13px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">
+      <div style="font-size:13px;color:#374151;font-weight:600;">${escHtml(resolvedProjectName)}</div></div>` : ''}
+    ${resolvedNote ? `<div style="background:#f0f7ff;border-left:3px solid #2563eb;padding:13px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">
       <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:6px;letter-spacing:0.3px;">NOTE</div>
-      <div style="font-size:13px;color:#374151;line-height:1.7;">${escHtml(noteText).replace(/\n/g,'<br>')}</div></div>` : ''}
+      <div style="font-size:13px;color:#374151;line-height:1.7;">${escHtml(resolvedNote).replace(/\n/g,'<br>')}</div></div>` : ''}
     ${loginUrl ? `<div style="background:#f8fafc;border-radius:8px;padding:16px 20px;margin-bottom:20px;border:1px solid #e5e7eb;">
       <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;font-weight:700;margin-bottom:12px;">Your Login Credentials</div>
       <table cellpadding="0" cellspacing="0">
