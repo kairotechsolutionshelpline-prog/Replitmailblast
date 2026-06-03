@@ -520,7 +520,7 @@ app.post('/api/senders/bulk', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'prefixes array required' });
 
   const domain = 'redalertsol.com';
-  const limited = prefixes.slice(0, 20);
+  const limited = prefixes.slice(0, 500);
   let added = 0, skipped = 0;
 
   const tx = db.transaction(() => {
