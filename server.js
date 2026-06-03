@@ -347,9 +347,9 @@ function calcStartingStage(deadlineStr) {
 
   if (daysLeft < 0)  return -1; // past deadline — block
   if (daysLeft === 0) return hour >= 9 ? 4 : 3; // deadline today — urgent
-  if (daysLeft === 1) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1; // 1 day left
-  if (daysLeft === 2) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1;
-  return hour >= 21 ? 1 : 0;
+  if (daysLeft === 1) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1; // 1 day left: before9→stage1, 9-21→stage2, after21→stage3
+  if (daysLeft === 2) return hour >= 21 ? 1 : hour >= 9 ? 0 : 0; // 2 days left: before21→stage0(enrolled), after21→stage1
+  return 0; // 3+ days left — start at beginning
 }
 
 // ── Seed default email templates if missing ───────────────────────────────────
@@ -1002,6 +1002,75 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
 // Reminder logs
 app.get('/api/reminder-logs', requireAuth, (req, res) => {
   res.json(stmts.allReminderLogs.all());
+});
+
+// -- Email Templates API
+app.get('/api/templates', requireAuth, (req, res) => {
+  res.json(stmts.allTemplates.all());
+});
+
+app.put('/api/templates/:name', requireAuth, (req, res) => {
+  const { subject, opening } = req.body;
+  const name = req.params.name;
+  const valid = ['registration','stage1','stage2','stage3','stage4','stage5'];
+  if (!valid.includes(name)) return res.status(400).json({ error: 'Invalid template name' });
+  const idMap = { registration:1, stage1:2, stage2:3, stage3:4, stage4:5, stage5:6 };
+  stmts.upsertTemplate.run(idMap[name], name, subject || '', opening || '');
+  res.json({ ok: true });
+});
+
+// -- Crosscheck Reminder Mail
+app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
+  const { reminderIds } = req.body;
+  if (!reminderIds?.length) return res.status(400).json({ error: 'No reminder IDs provided' });
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not set' });
+  const results = [];
+  for (const rid of reminderIds) {
+    const reminder = db.prepare().get(rid);
+    if (!reminder) { results.push({ id: rid, status: 'not_found' }); continue; }
+    if (reminder.is_completed || reminder.do_not_send) { results.push({ id: rid, email: reminder.member_email, status: 'skipped' }); continue; }
+    const nextStage = reminder.stage + 1;
+    if (nextStage > 5) { results.push({ id: rid, email: reminder.member_email, status: 'already_complete' }); continue; }
+    const senderEmail = getNextSender() || process.env.SENDER_EMAIL;
+    if (!senderEmail) { results.push({ id: rid, email: reminder.member_email, status: 'no_sender' }); continue; }
+    const co = { name: reminder.company_name || 'Our Company', phone: reminder.company_phone || '', address: '' };
+    let logoUrl = process.env.LOGO_URL || null;
+    if (!logoUrl && reminder.company_id) {
+      const coRow = stmts.getCompany.get(reminder.company_id);
+      if (coRow?.logo_path) logoUrl = APP_BASE_URL + '/api/companies/' + reminder.company_id + '/logo';
+    }
+    const subject = buildReminderSubject(nextStage, co.name);
+    const unsubLink = APP_BASE_URL + '/unsubscribe?token=' + emailToToken(reminder.member_email);
+    try {
+      const resend = new Resend(apiKey);
+      const replyToAddr = reminder.company_help_email || process.env.REPLY_TO_EMAIL || senderEmail;
+      const sendPromise = resend.emails.send({
+        from: co.name + ' <' + senderEmail + '>',
+        to: [reminder.member_email],
+        reply_to: replyToAddr,
+        subject: '[CROSSCHECK] ' + subject,
+        html: buildReminderEmail({
+          member: { name: reminder.member_name || 'Member', email: reminder.member_email },
+          co, stage: nextStage,
+          deadline: reminder.deadline,
+          loginUrl: reminder.login_url || '',
+          helpPhone: reminder.company_phone || '',
+          helpEmail: reminder.company_help_email || '',
+          noteText: reminder.company_note || '',
+          logoUrl, projectName: reminder.project_name || '',
+          unsubscribeLink: unsubLink
+        })
+      });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
+      const { error } = await Promise.race([sendPromise, timeoutPromise]);
+      if (error) throw new Error(error.message);
+      results.push({ id: rid, email: reminder.member_email, stage: nextStage, subject, status: 'sent' });
+    } catch (e) {
+      results.push({ id: rid, email: reminder.member_email, stage: nextStage, status: 'error', error: e.message });
+    }
+  }
+  res.json({ ok: true, results });
 });
 
 // Next cron run info
