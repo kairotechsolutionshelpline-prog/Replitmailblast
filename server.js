@@ -216,7 +216,7 @@ pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as com
                                 LEFT JOIN companies c ON r.company_id=c.id
                                 WHERE r.is_completed=0
                                 AND r.do_not_send=0
-                                AND (r.deadline IS NULL OR date(r.deadline) > date('now'))
+                                AND (r.deadline IS NULL OR r.deadline = '' OR date(r.deadline) >= date('now'))
                                 AND r.stage < 5
                                 AND r.member_email NOT IN (SELECT email FROM unsubscribers)
                                 ORDER BY r.stage ASC, r.last_sent_at ASC`),
