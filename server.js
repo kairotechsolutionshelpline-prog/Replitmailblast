@@ -927,8 +927,8 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
       if (!m.email) { skipped++; continue; }
       const existing = stmts.getReminderByEmail.get(m.email);
       if (existing) { skipped++; continue; }
-      const startStage = calcStartingStage(deadline);
-      if (startStage === -1) { skipped++; continue; }
+      const rawStage = calcStartingStage(deadline);
+      const startStage = rawStage === -1 ? 0 : rawStage;
       stmts.insReminder.run(
         m.email, m.name || '', companyId || null,
         startStage, deadline || null, loginUrl, batchName, projectName
