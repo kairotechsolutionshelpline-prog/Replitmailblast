@@ -1107,10 +1107,13 @@ const subject = buildReminderSubject(nextStage, co.name);
 
     try {
       const resend = new Resend(apiKey);
+      // Use the company's help_email (or REPLY_TO_EMAIL env var) as reply_to
+      // so that member replies reach a real inbox — not the rotating sender address.
+      const replyToAddr = reminder.company_help_email || process.env.REPLY_TO_EMAIL || senderEmail;
       const { error } = await resend.emails.send({
         from: `${co.name} <${senderEmail}>`,
         to: [reminder.member_email],
-        reply_to: senderEmail,
+        reply_to: replyToAddr,
         subject,
         html: buildReminderEmail({
           member: { name: reminder.member_name || 'Member', email: reminder.member_email },
