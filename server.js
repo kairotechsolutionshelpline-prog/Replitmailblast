@@ -329,10 +329,11 @@ function calcStartingStage(deadlineStr) {
   const daysLeft = Math.round((deadline - today) / (1000 * 60 * 60 * 24));
   const hour = now.getHours();
 
-  if (daysLeft <= 0) return -1; // past or on deadline — block
-  if (daysLeft === 1) return hour >= 9 ? 4 : 3;  // 31-05
-  if (daysLeft === 2) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1; // 30-05
-  return hour >= 21 ? 1 : 0; // 3+ days left — Day 1
+  if (daysLeft < 0)  return -1; // past deadline — block
+  if (daysLeft === 0) return hour >= 9 ? 4 : 3; // deadline today — urgent
+  if (daysLeft === 1) return hour >= 9 ? 4 : 3;
+  if (daysLeft === 2) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1;
+  return hour >= 21 ? 1 : 0;
 }
 
 // ── Campaign pause/resume tracking ───────────────────────────────────────────
