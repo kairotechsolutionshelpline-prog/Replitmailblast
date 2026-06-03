@@ -120,6 +120,14 @@ db.exec(`
     email      TEXT UNIQUE NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS email_templates (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT UNIQUE NOT NULL,
+    subject    TEXT DEFAULT '',
+    opening    TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // ── Safe schema migrations (add columns if missing) ──────────────────────────
@@ -219,6 +227,7 @@ pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as com
                                 AND r.do_not_send=0
                                 AND (r.deadline IS NULL OR r.deadline = '' OR date(r.deadline) >= date('now'))
                                 AND r.stage < 5
+                                AND (r.last_sent_at IS NULL OR date(r.last_sent_at) < date('now'))
                                 AND r.member_email NOT IN (SELECT email FROM unsubscribers)
                                 ORDER BY r.stage ASC, r.last_sent_at ASC`),
 
@@ -242,6 +251,13 @@ pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as com
   // Unsubscribers
   insUnsubscriber:  db.prepare('INSERT OR IGNORE INTO unsubscribers (email) VALUES (?)'),
   isUnsubscribed:   db.prepare('SELECT 1 FROM unsubscribers WHERE email=? LIMIT 1'),
+
+  // Email templates
+  allTemplates:     db.prepare('SELECT * FROM email_templates ORDER BY id'),
+  getTemplate:      db.prepare('SELECT * FROM email_templates WHERE name=?'),
+  upsertTemplate:   db.prepare(`INSERT INTO email_templates (id, name, subject, opening, updated_at)
+                                VALUES (?, ?, ?, ?, datetime('now'))
+                                ON CONFLICT(name) DO UPDATE SET subject=excluded.subject, opening=excluded.opening, updated_at=datetime('now')`),
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -331,12 +347,37 @@ function calcStartingStage(deadlineStr) {
 
   if (daysLeft < 0)  return -1; // past deadline — block
   if (daysLeft === 0) return hour >= 9 ? 4 : 3; // deadline today — urgent
-  if (daysLeft === 1) return hour >= 9 ? 4 : 3;
+  if (daysLeft === 1) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1; // 1 day left
   if (daysLeft === 2) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1;
   return hour >= 21 ? 1 : 0;
 }
 
-// ── Campaign pause/resume tracking ───────────────────────────────────────────
+// ── Seed default email templates if missing ───────────────────────────────────
+(function seedTemplates() {
+  const defaults = [
+    { id: 1, name: 'registration', subject: 'You have been registered successfully with {CompanyName}',
+      opening: 'You have been successfully registered with {CompanyName}. We\'re glad to have you on board!' },
+    { id: 2, name: 'stage1', subject: '🔔 Reminder: You have been registered with {CompanyName}',
+      opening: 'This is a reminder that you have been registered with {CompanyName}. Please log in and complete your pending project work at your earliest convenience.' },
+    { id: 3, name: 'stage2', subject: '⏰ 2nd Reminder: Please complete your pending work — {CompanyName}',
+      opening: 'This is a friendly reminder that you have pending project work with {CompanyName}. Please complete your submission at your earliest convenience.' },
+    { id: 4, name: 'stage3', subject: '📢 3rd Reminder: Your submission is still pending — {CompanyName}',
+      opening: 'We noticed your project is still pending. This is your 2nd reminder — please complete your work on time and with required accuracy.' },
+    { id: 5, name: 'stage4', subject: '⚠️ 4th Reminder: Urgent — Action required — {CompanyName}',
+      opening: 'Your submission is still pending with {CompanyName}. This is your 3rd reminder — please log in and complete your work immediately.' },
+    { id: 6, name: 'stage5', subject: '🚨 Final Reminder: Deadline approaching — {CompanyName}',
+      opening: 'We have not received your submission yet. This is an urgent 4th reminder — please complete your project without any further delay.' },
+  ];
+  const tx = db.transaction(() => {
+    for (const t of defaults) {
+      const existing = db.prepare('SELECT id FROM email_templates WHERE name=?').get(t.name);
+      if (!existing) {
+        db.prepare(`INSERT INTO email_templates (id, name, subject, opening) VALUES (?, ?, ?, ?)`).run(t.id, t.name, t.subject, t.opening);
+      }
+    }
+  });
+  tx();
+})();
 const campaignPaused = new Map();
 
 // ── Express setup ─────────────────────────────────────────────────────────────
@@ -1127,7 +1168,7 @@ const subject = buildReminderSubject(nextStage, co.name);
       // Use the company's help_email (or REPLY_TO_EMAIL env var) as reply_to
       // so that member replies reach a real inbox — not the rotating sender address.
       const replyToAddr = reminder.company_help_email || process.env.REPLY_TO_EMAIL || senderEmail;
-      const { error } = await resend.emails.send({
+      const sendPromise = resend.emails.send({
         from: `${co.name} <${senderEmail}>`,
         to: [reminder.member_email],
         reply_to: replyToAddr,
@@ -1145,6 +1186,10 @@ const subject = buildReminderSubject(nextStage, co.name);
           unsubscribeLink: unsubLink
         })
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Reminder send timeout after 30s')), 30000)
+      );
+      const { error } = await Promise.race([sendPromise, timeoutPromise]);
 
       if (error) throw new Error(error.message);
 
