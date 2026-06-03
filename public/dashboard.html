@@ -147,6 +147,8 @@
     .b-stage1   { background:rgba(79,102,247,0.12); color:var(--acc2); }
     .b-stage2   { background:rgba(251,191,36,0.12); color:var(--amb); }
     .b-stage3   { background:rgba(248,113,113,0.12); color:var(--red); }
+    .b-stage4   { background:rgba(234,88,12,0.15); color:#fb923c; }
+    .b-stage5   { background:rgba(220,38,38,0.15); color:#f87171; }
     .b-count    { background:rgba(79,102,247,0.18); color:var(--acc2); font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; }
 
     /* Progress */
@@ -1795,10 +1797,12 @@ function renderRemindersAccordion(data) {
   }
 
   const stageBadge = s => {
-    if (s===0) return '<span class="badge b-pending">Enrolled</span>';
-    if (s===1) return '<span class="badge b-stage1">Stage 1</span>';
-    if (s===2) return '<span class="badge b-stage2">Stage 2</span>';
-    if (s===3) return '<span class="badge b-stage3">Stage 3 (Final)</span>';
+    if (s===0) return '<span class="badge b-pending">Enrolled — Next: Stage 1</span>';
+    if (s===1) return '<span class="badge b-stage1">Stage 1 sent — Next: Stage 2</span>';
+    if (s===2) return '<span class="badge b-stage2">Stage 2 sent — Next: Stage 3</span>';
+    if (s===3) return '<span class="badge b-stage3">Stage 3 sent — Next: Stage 4</span>';
+    if (s===4) return '<span class="badge b-stage4">Stage 4 sent — Next: Final</span>';
+    if (s===5) return '<span class="badge b-stage5">✓ Final sent</span>';
     return s;
   };
 
