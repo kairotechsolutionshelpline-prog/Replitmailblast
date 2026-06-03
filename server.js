@@ -583,6 +583,7 @@ app.post('/api/senders/:id/test', requireAuth, async (req, res) => {
     const { error } = await resend.emails.send({
       from: fromEmail,
       to: [toEmail],
+      reply_to: sender.reply_to || undefined,
       subject: `✅ Test Email — ${fromEmail}`,
       html: `<div style="font-family:sans-serif;padding:24px;">
         <h2 style="color:#1a3fa8;">MailBlast Sender Test</h2>
@@ -877,6 +878,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     const { error } = await resend.emails.send({
       from: `${co.name} <${from}>`,
       to: [toEmail],
+      reply_to: from,
       subject,
       html
     });
@@ -1108,6 +1110,7 @@ const subject = buildReminderSubject(nextStage, co.name);
       const { error } = await resend.emails.send({
         from: `${co.name} <${senderEmail}>`,
         to: [reminder.member_email],
+        reply_to: senderEmail,
         subject,
         html: buildReminderEmail({
           member: { name: reminder.member_name || 'Member', email: reminder.member_email },
