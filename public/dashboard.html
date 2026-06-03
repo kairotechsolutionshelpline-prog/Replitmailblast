@@ -286,6 +286,11 @@
     ::-webkit-scrollbar { width:4px; height:4px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:var(--s4); border-radius:2px; }
+
+    /* Template tab buttons */
+    .tpl-tab { background:var(--s2); color:var(--tx-m); border:1px solid var(--bdr2); }
+    .tpl-tab:hover { background:var(--s3); color:var(--tx); }
+    .tpl-tab.active { background:var(--acc-s); color:var(--acc2); border-color:rgba(79,102,247,0.3); font-weight:700; }
     code { background:var(--s3); padding:2px 7px; border-radius:5px; font-size:12px; color:var(--acc2); font-family:'Courier New',monospace; }
     .test-result { display:none; font-size:12.5px; padding:10px 14px; border-radius:var(--r); margin-top:10px; }
     .test-result.ok  { background:var(--grn-s); color:var(--grn); border:1px solid rgba(52,211,153,0.18); display:block; }
@@ -342,6 +347,10 @@
       <button class="nav-btn" onclick="showPage('reports',this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Reports
+      </button>
+      <button class="nav-btn" onclick="showPage('templates',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Subject &amp; Body
       </button>
       <button class="nav-btn" onclick="showPage('connection',this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
@@ -578,6 +587,10 @@
             <div class="btn-grp">
               <button class="btn btn-primary btn-sm" onclick="openAddReminderModal()">+ Add Member</button>
               <button class="btn btn-sec btn-sm" onclick="openBulkReminderModal()">Bulk Import</button>
+              <button class="btn btn-warn btn-sm" onclick="crosscheckReminderMail()" id="crosscheckBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                Crosscheck Reminder Mail
+              </button>
               <button class="btn btn-sec btn-sm" onclick="loadReminders()">↻ Refresh</button>
             </div>
           </div>
@@ -741,6 +754,66 @@
               <p>No campaign history yet. Run a campaign to see results here.</p>
             </div>
             <div id="histList"></div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ══ SUBJECT & BODY (TEMPLATES) PAGE ══ -->
+      <div class="page" id="page-templates">
+        <div class="card">
+          <div class="card-hd">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--acc2);opacity:0.8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+                Email Subject &amp; Opening Body
+              </div>
+              <div class="card-desc">Edit subject line and opening paragraph for each template. Changes apply to all future cron sends.</div>
+            </div>
+            <div class="btn-grp">
+              <button class="btn btn-primary btn-sm" onclick="saveCurrentTemplate()" id="tplSaveBtn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Changes
+              </button>
+              <button class="btn btn-sec btn-sm" onclick="cancelTemplateEdit()" id="tplCancelBtn" style="display:none;">Cancel</button>
+            </div>
+          </div>
+          <div class="card-bd" style="padding:0;">
+            <!-- Available Placeholders -->
+            <div style="padding:14px 20px;border-bottom:1px solid var(--bdr);background:var(--s2);">
+              <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--tx-h);margin-bottom:8px;">Available Placeholders — click to insert at cursor</div>
+              <div class="placeholder-chips" id="tplPlaceholderChips">
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{FirstName}')">&#123;FirstName&#125;</span>
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{MemberName}')">&#123;MemberName&#125;</span>
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{CompanyName}')">&#123;CompanyName&#125;</span>
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{ProjectName}')">&#123;ProjectName&#125;</span>
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{DeadlineDate}')">&#123;DeadlineDate&#125;</span>
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{LoginUrl}')">&#123;LoginUrl&#125;</span>
+                <span class="ph-chip" onclick="tplInsertPlaceholder('{Email}')">&#123;Email&#125;</span>
+              </div>
+            </div>
+            <!-- Template selector tabs -->
+            <div style="padding:14px 20px 0;display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--bdr);">
+              <button class="btn btn-sm tpl-tab active" data-tpl="registration" onclick="switchTemplate('registration',this)">Registration</button>
+              <button class="btn btn-sm tpl-tab" data-tpl="stage1" onclick="switchTemplate('stage1',this)">Stage 1</button>
+              <button class="btn btn-sm tpl-tab" data-tpl="stage2" onclick="switchTemplate('stage2',this)">Stage 2</button>
+              <button class="btn btn-sm tpl-tab" data-tpl="stage3" onclick="switchTemplate('stage3',this)">Stage 3</button>
+              <button class="btn btn-sm tpl-tab" data-tpl="stage4" onclick="switchTemplate('stage4',this)">Stage 4</button>
+              <button class="btn btn-sm tpl-tab" data-tpl="stage5" onclick="switchTemplate('stage5',this)" style="margin-bottom:14px;">Stage 5 (Final)</button>
+            </div>
+            <div style="padding:18px 20px;">
+              <div id="tplEditorWrap">
+                <div class="field">
+                  <label>Subject Line — <span id="tplCurrentName" style="color:var(--acc2);font-weight:700;text-transform:none;letter-spacing:0;">Registration</span></label>
+                  <input type="text" id="tplSubjectInput" placeholder="Subject line…" oninput="onTplChange()" onfocus="tplLastFocused='subject'">
+                </div>
+                <div class="field">
+                  <label>Opening Body Paragraph</label>
+                  <textarea id="tplBodyInput" rows="5" placeholder="Opening paragraph shown in the email body…" oninput="onTplChange()" onfocus="tplLastFocused='body'"></textarea>
+                </div>
+                <div id="tplSavedAt" style="font-size:11px;color:var(--tx-h);margin-top:-6px;"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1017,7 +1090,7 @@ function showPruneToast(count) {
 // ── Page routing ─────────────────────────────────────────────────────────────
 const pageTitles = {
   compose: 'Compose &amp; Send', senders: 'Sender Emails', reminders: 'Auto Reminders',
-  custommail: 'Custom Mail Editor', companies: 'Companies', reports: 'Reports', connection: 'Connection'
+  custommail: 'Custom Mail Editor', companies: 'Companies', reports: 'Reports', connection: 'Connection', templates: 'Subject &amp; Body'
 };
 function showPage(name, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1026,6 +1099,7 @@ function showPage(name, btn) {
   if (btn) btn.classList.add('active');
   document.getElementById('pageTitle').innerHTML = pageTitles[name] || name;
   if (name === 'reports')    loadHistory();
+  if (name === 'templates')  loadTemplates();
   if (name === 'reminders')  { loadReminders(); loadReminderLogs(); startCountdown(); }
   if (name === 'custommail') { loadCustomHistory(); refreshCustomSenders(); }
   if (name === 'senders')    loadSenders();
@@ -1726,9 +1800,9 @@ async function loadHistory() {
 }
 
 function renderHistory(data) {
-  const empty = document.getElementById('histEmpty'), list = document.getElementById('histList'), bubble = document.getElementById('histBubble');
-  if (!data.length) { empty.style.display=''; list.innerHTML=''; bubble.style.display='none'; return; }
-  empty.style.display='none'; bubble.textContent=data.length; bubble.style.display='';
+  const empty = document.getElementById('histEmpty'), list = document.getElementById('histList');
+  if (!data.length) { empty.style.display=''; list.innerHTML=''; return; }
+  empty.style.display='none';
   list.innerHTML = data.map((entry, ei) => {
     const ts = new Date(entry.timestamp);
     const date = ts.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
@@ -2225,6 +2299,132 @@ function toast(msg, type='ok') {
   wrap.appendChild(t);
   setTimeout(() => t.style.opacity = '0', 3800);
   setTimeout(() => t.remove(), 4200);
+}
+
+// ── Templates (Subject & Body) ────────────────────────────────────────────────
+let tplData = {};
+let tplCurrent = 'registration';
+let tplDirty = false;
+let tplLastFocused = 'subject'; // 'subject' | 'body'
+
+const tplNames = {
+  registration: 'Registration Mail',
+  stage1: 'Stage 1 — Reminder',
+  stage2: 'Stage 2 — 2nd Reminder',
+  stage3: 'Stage 3 — 3rd Reminder',
+  stage4: 'Stage 4 — 4th Reminder',
+  stage5: 'Stage 5 — Final Reminder'
+};
+
+async function loadTemplates() {
+  try {
+    const r = await fetch('/api/templates', { credentials: 'same-origin' });
+    const rows = await r.json();
+    tplData = {};
+    for (const t of rows) tplData[t.name] = t;
+    switchTemplate(tplCurrent, document.querySelector('.tpl-tab.active'));
+  } catch { toast('Failed to load templates', 'err'); }
+}
+
+function switchTemplate(name, btn) {
+  if (tplDirty && !confirm('You have unsaved changes. Discard and switch?')) return;
+  tplCurrent = name;
+  tplDirty = false;
+  document.querySelectorAll('.tpl-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const t = tplData[name] || { subject: '', opening: '' };
+  document.getElementById('tplSubjectInput').value = t.subject || '';
+  document.getElementById('tplBodyInput').value = t.opening || '';
+  document.getElementById('tplCurrentName').textContent = tplNames[name] || name;
+  document.getElementById('tplSaveBtn').disabled = true;
+  document.getElementById('tplCancelBtn').style.display = 'none';
+  const ua = t.updated_at ? 'Last saved: ' + new Date(t.updated_at + 'Z').toLocaleString('en-IN', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+  document.getElementById('tplSavedAt').textContent = ua;
+}
+
+function onTplChange() {
+  tplDirty = true;
+  document.getElementById('tplSaveBtn').disabled = false;
+  document.getElementById('tplCancelBtn').style.display = '';
+}
+
+async function saveCurrentTemplate() {
+  const subject = document.getElementById('tplSubjectInput').value.trim();
+  const opening = document.getElementById('tplBodyInput').value.trim();
+  try {
+    const r = await fetch('/api/templates/' + tplCurrent, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ subject, opening })
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Save failed', 'err'); return; }
+    toast('Template saved!', 'ok');
+    tplDirty = false;
+    tplData[tplCurrent] = { ...tplData[tplCurrent], subject, opening, updated_at: new Date().toISOString().replace('T',' ').slice(0,19) };
+    document.getElementById('tplSaveBtn').disabled = true;
+    document.getElementById('tplCancelBtn').style.display = 'none';
+    document.getElementById('tplSavedAt').textContent = 'Last saved: just now';
+  } catch { toast('Failed to save template', 'err'); }
+}
+
+function cancelTemplateEdit() {
+  tplDirty = false;
+  switchTemplate(tplCurrent, document.querySelector('.tpl-tab.active'));
+}
+
+function tplInsertPlaceholder(placeholder) {
+  const field = tplLastFocused === 'body' ? document.getElementById('tplBodyInput') : document.getElementById('tplSubjectInput');
+  const start = field.selectionStart ?? field.value.length;
+  const end = field.selectionEnd ?? field.value.length;
+  field.value = field.value.slice(0, start) + placeholder + field.value.slice(end);
+  const cursor = start + placeholder.length;
+  field.setSelectionRange(cursor, cursor);
+  field.focus();
+  onTplChange();
+}
+
+// ── Crosscheck Reminder Mail ──────────────────────────────────────────────────
+async function crosscheckReminderMail() {
+  // Gather all pending (non-completed, non-do_not_send, stage < 5) reminder IDs
+  try {
+    const r = await fetch('/api/reminders', { credentials: 'same-origin' });
+    const data = await r.json();
+    const pending = data.filter(x => !x.is_completed && !x.do_not_send && x.stage < 5);
+    if (!pending.length) { toast('No pending reminder members found.', 'err'); return; }
+
+    const confirmed = confirm('Crosscheck will send the exact next reminder email (marked [CROSSCHECK] in subject) to ' + pending.length + ' pending member(s).
+
+This does NOT advance their stage — it is purely for preview/verification.
+
+Continue?');
+    if (!confirmed) return;
+
+    const btn = document.getElementById('crosscheckBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    const ids = pending.map(x => x.id);
+    const res = await fetch('/api/reminders/crosscheck', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ reminderIds: ids })
+    });
+    const d = await res.json();
+    if (!res.ok) { toast(d.error || 'Crosscheck failed', 'err'); return; }
+
+    const sent = d.results.filter(x => x.status === 'sent').length;
+    const failed = d.results.filter(x => x.status === 'error').length;
+    toast('Crosscheck sent: ' + sent + ' OK, ' + failed + ' failed', sent > 0 ? 'ok' : 'err');
+    btn.disabled = false;
+    btn.textContent = 'Crosscheck Reminder Mail';
+  } catch (e) {
+    toast('Crosscheck error: ' + e.message, 'err');
+    const btn = document.getElementById('crosscheckBtn');
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Crosscheck Reminder Mail'; }
+  }
 }
 </script>
 </body>
