@@ -785,7 +785,16 @@ app.post('/api/send', requireAuth, async (req, res) => {
     }
 
     const regTpl = stmts.getTemplate.get('registration');
-    const subject = regTpl?.subject ? regTpl.subject.replace('{CompanyName}', co.name) : `You have been registered successfully with ${co.name}`;
+    const rawSubject = regTpl?.subject || `You have been registered successfully with {CompanyName}`;
+    const subject = parseTemplateVars(rawSubject, {
+      firstName: (member.name || 'Member').split(' ')[0],
+      memberName: member.name || 'Member',
+      companyName: co.name || '',
+      email: member.email || '',
+      loginUrl: companyLoginUrl || '',
+      deadlineDate: deadline ? formatDeadlineDate(deadline) : '',
+      projectName: ''
+    });
     const unsubLink = buildUnsubscribeLink(member.email, req);
 
     try {
