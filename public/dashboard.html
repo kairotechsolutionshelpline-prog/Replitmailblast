@@ -843,8 +843,10 @@
                 <option value="registration">Registration Confirmation</option>
                 <option value="reminder1">Reminder — Stage 1</option>
                 <option value="reminder2">Reminder — Stage 2</option>
-                <option value="reminder3">Reminder — Stage 3 (Final)</option>
-              </select>
+                <option value="reminder3">Reminder — Stage 3</option>
+                <option value="reminder4">Reminder — Stage 4</option>
+                <option value="reminder5">Reminder — Stage 5 (Final)</option>
+              </select>  
             </div>
             <div id="testTemplatePreview" style="display:none;background:var(--s2);border:1px solid var(--bdr2);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;">
               <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx-h);margin-bottom:6px;">Subject Preview</div>
@@ -2244,11 +2246,13 @@ async function testConn() {
 }
 
 const testTemplateSubjects = {
-  basic:        'MailBlast Test Email',
-  registration: 'You have been registered successfully with [Company Name]',
-  reminder1:    'Reminder: Thank you for working with [Company Name]',
-  reminder2:    '2nd Reminder: Its Friendly Reminder — [Company Name]',
-  reminder3:    'Final Reminder: Deadline approaching — [Company Name]'
+  basic:        'Basic test — no template',
+  registration: 'Registration Confirmation',
+  reminder1:    'Stage 1 — subject from Subject & Body tab',
+  reminder2:    'Stage 2 — subject from Subject & Body tab',
+  reminder3:    'Stage 3 — subject from Subject & Body tab',
+  reminder4:    'Stage 4 — subject from Subject & Body tab',
+  reminder5:    'Stage 5 — subject from Subject & Body tab'
 };
 
 document.getElementById('testTemplateSelect')?.addEventListener('change', function() {
