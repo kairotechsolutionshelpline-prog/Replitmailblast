@@ -2387,14 +2387,15 @@ function tplInsertPlaceholder(placeholder) {
 
 // ── Crosscheck Reminder Mail ──────────────────────────────────────────────────
 async function crosscheckReminderMail() {
-  // Gather all pending (non-completed, non-do_not_send, stage < 5) reminder IDs
+  if (!members.length) { toast('No members parsed. Paste and parse members first.', 'err'); return; }
   try {
     const r = await fetch('/api/reminders', { credentials: 'same-origin' });
     const data = await r.json();
-    const pending = data.filter(x => !x.is_completed && !x.do_not_send && x.stage < 5);
-    if (!pending.length) { toast('No pending reminder members found.', 'err'); return; }
+    const parsedEmails = members.map(m => m.email.toLowerCase());
+    const pending = data.filter(x => !x.is_completed && !x.do_not_send && x.stage < 5 && parsedEmails.includes(x.member_email.toLowerCase()));
+    if (!pending.length) { toast('None of the parsed members are found in Reminders as pending. Add them to Reminders first.', 'err'); return; }
 
-    const confirmed = confirm('Crosscheck will send the exact next reminder email (marked [CROSSCHECK] in subject) to ' + pending.length + ' pending member(s).\n\nThis does NOT advance their stage — it is purely for preview/verification.\n\nContinue?');
+    const confirmed = confirm('Crosscheck will send the exact next reminder email (marked [CROSSCHECK] in subject) to ' + pending.length + ' parsed member(s).\n\nThis does NOT advance their stage — it is purely for preview/verification.\n\nContinue?');
     if (!confirmed) return;
 
     const btn = document.getElementById('crosscheckBtn');
