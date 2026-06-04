@@ -784,7 +784,8 @@ app.post('/api/send', requireAuth, async (req, res) => {
       continue;
     }
 
-    const subject = `You have been registered successfully with ${co.name}`;
+    const regTpl = stmts.getTemplate.get('registration');
+    const subject = regTpl?.subject ? regTpl.subject.replace('{CompanyName}', co.name) : `You have been registered successfully with ${co.name}`;
     const unsubLink = buildUnsubscribeLink(member.email, req);
 
     try {
@@ -856,12 +857,13 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
   let subject, html;
 
   if (template === 'registration') {
-    subject = `You have been registered successfully with ${co.name}`;
+    const regTpl = stmts.getTemplate.get('registration');
+    subject = regTpl?.subject ? regTpl.subject.replace('{CompanyName}', co.name) : `You have been registered successfully with ${co.name}`;
     html = buildPosterEmail({
       member: testMember, co, initials,
       deadline: testDeadline, deadlineTime: '23:59',
       loginUrl: testLoginUrl, helpPhone: '+91 98765 43210',
-      helpEmail: from, messageNote: 'This is a test email to preview your registration confirmation template.',
+      helpEmail: from, messageNote: regTpl?.opening || 'This is a test email to preview your registration confirmation template.',
       logoUrl, unsubscribeLink: unsubLink
     });
 } else if (template === 'reminder1') {
