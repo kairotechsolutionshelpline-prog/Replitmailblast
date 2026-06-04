@@ -1077,6 +1077,7 @@ app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
       });
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Reminder send timeout after 30s')), 30000)
+      );
       const { error } = await Promise.race([sendPromise, timeoutPromise]);
       if (error) throw new Error(error.message);
       results.push({ id: rid, email: reminder.member_email, stage: nextStage, subject, status: 'sent' });
