@@ -1069,11 +1069,14 @@ app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
           helpPhone: reminder.company_phone || '',
           helpEmail: reminder.company_help_email || '',
           noteText: reminder.company_note || '',
-          logoUrl, projectName: reminder.project_name || '',
-          unsubscribeLink: unsubLink
+          logoUrl,
+          projectName: reminder.project_name || '',
+          unsubscribeLink: unsubLink,
+          openingOverride: stageOpening
         })
       });
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 30000));
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Reminder send timeout after 30s')), 30000)
       const { error } = await Promise.race([sendPromise, timeoutPromise]);
       if (error) throw new Error(error.message);
       results.push({ id: rid, email: reminder.member_email, stage: nextStage, subject, status: 'sent' });
@@ -1240,7 +1243,10 @@ async function runReminderBatch() {
       const coRow = stmts.getCompany.get(reminder.company_id);
       if (coRow?.logo_path) logoUrl = `${APP_BASE_URL}/api/companies/${reminder.company_id}/logo`;
     }
-const subject = buildReminderSubject(nextStage, co.name);
+const stageTplNames = ['','stage1','stage2','stage3','stage4','stage5'];
+    const stageTpl = stmts.getTemplate.get(stageTplNames[nextStage]);
+    const subject = stageTpl?.subject ? parseTemplateVars(stageTpl.subject, { companyName: co.name, memberName: reminder.member_name || 'Member', firstName: (reminder.member_name||'Member').split(' ')[0], email: reminder.member_email, deadlineDate: reminder.deadline || '', loginUrl: reminder.login_url || '', projectName: reminder.project_name || '' }) : buildReminderSubject(nextStage, co.name);
+    const stageOpening = stageTpl?.opening || null;
     const unsubLink = `${APP_BASE_URL}/unsubscribe?token=${emailToToken(reminder.member_email)}`;
 
     try {
@@ -1391,7 +1397,7 @@ function buildReminderSubject(stage, companyName) {
   return stages[stage] || `Reminder from ${companyName}`;
 }
 
-function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, helpEmail, noteText, logoUrl, projectName, unsubscribeLink }) {
+function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, helpEmail, noteText, logoUrl, projectName, unsubscribeLink, openingOverride }) {
   const deadlineDisplay = deadline ? formatDeadlineDate(deadline) : null;
   const initials = (co.name || 'C').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
@@ -1451,7 +1457,7 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
   <tr><td style="padding:24px 24px 0;">
     <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e;font-weight:500;">Dear ${escHtml(member.name || 'Member')},</p>
     <div style="background:${stageBadgeColor};color:${stageBadgeText};padding:9px 18px;border-radius:6px;font-size:13px;font-weight:700;margin-bottom:18px;border:1px solid ${stageBadgeBorder};display:inline-block;">${stageBadgeLabel}</div>
-    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.75;">${stageMessages[stage]}</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.75;">${openingOverride ? escHtml(parseTemplateVars(openingOverride, templateVars)) : stageMessages[stage]}</p>
     ${resolvedProjectName ? `<div style="background:#f0f7ff;border-left:3px solid #1a3fa8;padding:10px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;">
       <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:4px;letter-spacing:0.3px;">PROJECT</div>
       <div style="font-size:13px;color:#374151;font-weight:600;">${escHtml(resolvedProjectName)}</div></div>` : ''}
