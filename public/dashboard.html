@@ -2394,11 +2394,7 @@ async function crosscheckReminderMail() {
     const pending = data.filter(x => !x.is_completed && !x.do_not_send && x.stage < 5);
     if (!pending.length) { toast('No pending reminder members found.', 'err'); return; }
 
-    const confirmed = confirm('Crosscheck will send the exact next reminder email (marked [CROSSCHECK] in subject) to ' + pending.length + ' pending member(s).
-
-This does NOT advance their stage — it is purely for preview/verification.
-
-Continue?');
+    const confirmed = confirm('Crosscheck will send the exact next reminder email (marked [CROSSCHECK] in subject) to ' + pending.length + ' pending member(s).\n\nThis does NOT advance their stage — it is purely for preview/verification.\n\nContinue?');
     if (!confirmed) return;
 
     const btn = document.getElementById('crosscheckBtn');
