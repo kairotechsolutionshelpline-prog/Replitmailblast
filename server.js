@@ -1130,7 +1130,7 @@ app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
   if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not set' });
   const results = [];
   for (const rid of reminderIds) {
-    const reminder = db.prepare().get(rid);
+    const reminder = db.prepare('SELECT r.*, c.name as company_name, c.phone as company_phone, c.help_email as company_help_email, c.note as company_note FROM reminders r LEFT JOIN companies c ON r.company_id=c.id WHERE r.id=?').get(rid);
     if (!reminder) { results.push({ id: rid, status: 'not_found' }); continue; }
     if (reminder.is_completed || reminder.do_not_send) { results.push({ id: rid, email: reminder.member_email, status: 'skipped' }); continue; }
     const nextStage = reminder.stage + 1;
