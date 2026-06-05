@@ -1143,8 +1143,8 @@ app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
     const reminder = db.prepare('SELECT r.*, c.name as company_name, c.phone as company_phone, c.help_email as company_help_email, c.note as company_note FROM reminders r LEFT JOIN companies c ON r.company_id=c.id WHERE r.id=?').get(rid);
     if (!reminder) { results.push({ id: rid, status: 'not_found' }); continue; }
     if (reminder.is_completed || reminder.do_not_send) { results.push({ id: rid, email: reminder.member_email, status: 'skipped' }); continue; }
-    const nextStage = reminder.stage + 1;
-    if (nextStage > 5) { results.push({ id: rid, email: reminder.member_email, status: 'already_complete' }); continue; }
+    const nextStage = reminder.next_stage;
+    if (!nextStage || nextStage < 1 || nextStage > 5) { results.push({ id: rid, email: reminder.member_email, status: 'already_complete' }); continue; }
     const senderEmail = getNextSender() || process.env.SENDER_EMAIL;
     if (!senderEmail) { results.push({ id: rid, email: reminder.member_email, status: 'no_sender' }); continue; }
     const co = { name: reminder.company_name || 'Our Company', phone: reminder.company_phone || '', address: '' };
