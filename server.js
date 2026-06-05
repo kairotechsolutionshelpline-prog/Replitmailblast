@@ -1160,7 +1160,7 @@ app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
     const unsubLink = APP_BASE_URL + '/unsubscribe?token=' + emailToToken(reminder.member_email);
     try {
       const resend = new Resend(apiKey);
-      const replyToAddr = reminder.company_help_email || process.env.REPLY_TO_EMAIL || senderEmail;
+      const replyToAddr = process.env.REPLY_TO_EMAIL || reminder.company_help_email || senderEmail;
       const sendPromise = resend.emails.send({
         from: co.name + ' <' + senderEmail + '>',
         to: [reminder.member_email],
@@ -1387,7 +1387,7 @@ async function runReminderBatch() {
 
     try {
       const resend = new Resend(apiKey);
-      const replyToAddr = reminder.company_help_email || process.env.REPLY_TO_EMAIL || senderEmail;
+      const replyToAddr = process.env.REPLY_TO_EMAIL || reminder.company_help_email || senderEmail;
       const sendPromise = resend.emails.send({
         from: `${co.name} <${senderEmail}>`,
         to: [reminder.member_email],
