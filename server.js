@@ -955,7 +955,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
 
   if (template === 'registration') {
     const regTpl = stmts.getTemplate.get('registration');
-    subject = regTpl?.subject ? regTpl.subject.replace('{CompanyName}', co.name) : `You have been registered successfully with ${co.name}`;
+    subject = regTpl?.subject ? parseTemplateVars(regTpl.subject, { companyName: co.name, memberName: testMember.name, firstName: testMember.name.split(' ')[0], email: testMember.email, deadlineDate: formatDeadlineDate(testDeadline), loginUrl: testLoginUrl, projectName: '' }) : `You have been registered successfully with ${co.name}`;
     html = buildPosterEmail({
       member: testMember, co, initials,
       deadline: testDeadline, deadlineTime: '23:59',
@@ -964,46 +964,56 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
       logoUrl, unsubscribeLink: unsubLink
     });
 } else if (template === 'reminder1') {
-    subject = buildReminderSubject(1, co.name);
+    const tpl1 = stmts.getTemplate.get('stage1');
+    subject = tpl1?.subject ? parseTemplateVars(tpl1.subject, { companyName: co.name, memberName: testMember.name, firstName: testMember.name.split(' ')[0], email: testMember.email, deadlineDate: formatDeadlineDate(testDeadline), loginUrl: testLoginUrl, projectName: '' }) : buildReminderSubject(1, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 1,
       deadline: testDeadline, loginUrl: testLoginUrl,
       helpPhone: '+91 98765 43210', helpEmail: from,
       noteText: 'This is a sample note from company settings.',
-      logoUrl, projectName: '', unsubscribeLink: unsubLink
+      logoUrl, projectName: '', unsubscribeLink: unsubLink,
+      openingOverride: tpl1?.opening || null
     });
   } else if (template === 'reminder2') {
-    subject = buildReminderSubject(2, co.name);
+    const tpl2 = stmts.getTemplate.get('stage2');
+    subject = tpl2?.subject ? parseTemplateVars(tpl2.subject, { companyName: co.name, memberName: testMember.name, firstName: testMember.name.split(' ')[0], email: testMember.email, deadlineDate: formatDeadlineDate(testDeadline), loginUrl: testLoginUrl, projectName: '' }) : buildReminderSubject(2, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 2,
       deadline: testDeadline, loginUrl: testLoginUrl,
       helpPhone: '+91 98765 43210', helpEmail: from,
       noteText: 'This is a sample note from company settings.',
-      logoUrl, projectName: '', unsubscribeLink: unsubLink
+      logoUrl, projectName: '', unsubscribeLink: unsubLink,
+      openingOverride: tpl2?.opening || null
     });
   } else if (template === 'reminder3') {
-    subject = buildReminderSubject(3, co.name);
+    const tpl3 = stmts.getTemplate.get('stage3');
+    subject = tpl3?.subject ? parseTemplateVars(tpl3.subject, { companyName: co.name, memberName: testMember.name, firstName: testMember.name.split(' ')[0], email: testMember.email, deadlineDate: formatDeadlineDate(testDeadline), loginUrl: testLoginUrl, projectName: '' }) : buildReminderSubject(3, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 3,
       deadline: testDeadline, loginUrl: testLoginUrl,
       helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
-      unsubscribeLink: unsubLink
+      unsubscribeLink: unsubLink,
+      openingOverride: tpl3?.opening || null
     });
   } else if (template === 'reminder4') {
-    subject = buildReminderSubject(4, co.name);
+    const tpl4 = stmts.getTemplate.get('stage4');
+    subject = tpl4?.subject ? parseTemplateVars(tpl4.subject, { companyName: co.name, memberName: testMember.name, firstName: testMember.name.split(' ')[0], email: testMember.email, deadlineDate: formatDeadlineDate(testDeadline), loginUrl: testLoginUrl, projectName: '' }) : buildReminderSubject(4, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 4,
       deadline: testDeadline, loginUrl: testLoginUrl,
       helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
-      unsubscribeLink: unsubLink
+      unsubscribeLink: unsubLink,
+      openingOverride: tpl4?.opening || null
     });
   } else if (template === 'reminder5') {
-    subject = buildReminderSubject(5, co.name);
+    const tpl5 = stmts.getTemplate.get('stage5');
+    subject = tpl5?.subject ? parseTemplateVars(tpl5.subject, { companyName: co.name, memberName: testMember.name, firstName: testMember.name.split(' ')[0], email: testMember.email, deadlineDate: formatDeadlineDate(testDeadline), loginUrl: testLoginUrl, projectName: '' }) : buildReminderSubject(5, co.name);
     html = buildReminderEmail({
       member: testMember, co, stage: 5,
       deadline: testDeadline, loginUrl: testLoginUrl,
       helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
-      unsubscribeLink: unsubLink
+      unsubscribeLink: unsubLink,
+      openingOverride: tpl5?.opening || null
     });
   } else {
     subject = `✅ Test Email from MailBlast`;
