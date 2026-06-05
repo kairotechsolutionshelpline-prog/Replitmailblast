@@ -133,9 +133,11 @@ db.exec(`
 // ── Safe schema migrations (add columns if missing) ──────────────────────────
 (function runMigrations() {
   const cols = db.prepare("PRAGMA table_info(reminders)").all().map(c => c.name);
-  if (!cols.includes('batch_name'))   db.exec("ALTER TABLE reminders ADD COLUMN batch_name TEXT DEFAULT ''");
-  if (!cols.includes('do_not_send'))  db.exec("ALTER TABLE reminders ADD COLUMN do_not_send INTEGER DEFAULT 0");
-  if (!cols.includes('project_name')) db.exec("ALTER TABLE reminders ADD COLUMN project_name TEXT DEFAULT ''");
+  if (!cols.includes('batch_name'))    db.exec("ALTER TABLE reminders ADD COLUMN batch_name TEXT DEFAULT ''");
+  if (!cols.includes('do_not_send'))   db.exec("ALTER TABLE reminders ADD COLUMN do_not_send INTEGER DEFAULT 0");
+  if (!cols.includes('project_name'))  db.exec("ALTER TABLE reminders ADD COLUMN project_name TEXT DEFAULT ''");
+  if (!cols.includes('next_stage'))    db.exec("ALTER TABLE reminders ADD COLUMN next_stage INTEGER DEFAULT 1");
+  if (!cols.includes('next_send_at'))  db.exec("ALTER TABLE reminders ADD COLUMN next_send_at TEXT DEFAULT NULL");
 
   const cmCols = db.prepare("PRAGMA table_info(custom_mail_history)").all().map(c => c.name);
   if (!cmCols.includes('body_full'))  db.exec("ALTER TABLE custom_mail_history ADD COLUMN body_full TEXT DEFAULT ''");
@@ -213,23 +215,27 @@ const stmts = {
                              ORDER BY r.batch_name ASC, r.created_at DESC`),
   getReminderByEmail: db.prepare('SELECT * FROM reminders WHERE member_email = ? LIMIT 1'),
   insReminder:   db.prepare(`INSERT INTO reminders
-                             (member_email,member_name,company_id,stage,is_completed,deadline,login_url,batch_name,project_name)
-                             VALUES (?,?,?,?,0,?,?,?,?)`),
-  updReminderStage: db.prepare('UPDATE reminders SET stage=?,last_sent_at=datetime(\'now\') WHERE id=?'),
-  setReminderComplete: db.prepare('UPDATE reminders SET is_completed=1 WHERE id=?'),
-  setReminderDoNotSend: db.prepare('UPDATE reminders SET do_not_send=1 WHERE member_email=?'),
+                             (member_email,member_name,company_id,stage,is_completed,deadline,login_url,batch_name,project_name,next_stage,next_send_at)
+                             VALUES (?,?,?,0,0,?,?,?,?,?,?)`),
+  updReminderStage: db.prepare('UPDATE reminders SET stage=?,last_sent_at=datetime(\'now\'),next_stage=?,next_send_at=? WHERE id=?'),
+  setReminderComplete: db.prepare('UPDATE reminders SET is_completed=1,next_send_at=NULL WHERE id=?'),
+  setReminderDoNotSend: db.prepare('UPDATE reminders SET do_not_send=1,next_send_at=NULL WHERE member_email=?'),
   delReminder:   db.prepare('DELETE FROM reminders WHERE id=?'),
-pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as company_phone,
+  pendingReminders: db.prepare(`SELECT r.*, c.name as company_name, c.phone as company_phone,
                                 c.help_email as company_help_email, c.note as company_note
                                 FROM reminders r
                                 LEFT JOIN companies c ON r.company_id=c.id
                                 WHERE r.is_completed=0
                                 AND r.do_not_send=0
-                                AND (r.deadline IS NULL OR r.deadline = '' OR date(r.deadline) >= date('now'))
-                                AND r.stage < 5
-                                AND (r.last_sent_at IS NULL OR date(r.last_sent_at) < date('now'))
+                                AND r.next_send_at IS NOT NULL
+                                AND datetime(r.next_send_at) <= datetime('now')
+                                AND (
+                                  r.deadline IS NULL OR r.deadline = ''
+                                  OR datetime('now') < datetime(r.deadline || 'T00:00:00', '-5 hours', '-30 minutes')
+                                )
                                 AND r.member_email NOT IN (SELECT email FROM unsubscribers)
-                                ORDER BY r.stage ASC, r.last_sent_at ASC`),
+                                ORDER BY r.next_send_at ASC`),
+
 
   // Reminder logs
   insReminderLog:  db.prepare(`INSERT INTO reminder_logs (member_email,subject,status,error_message,stage,sender_used)
@@ -335,21 +341,103 @@ function buildUnsubscribeLink(email, req) {
   return `${getBaseUrl(req)}/unsubscribe?token=${emailToToken(email)}`;
 }
 
-// ── Late-join stage calculator ────────────────────────────────────────────────
-function calcStartingStage(deadlineStr) {
-  if (!deadlineStr) return 0;
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const [y, m, d] = deadlineStr.split('-').map(Number);
-  const deadline = new Date(y, m - 1, d);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const daysLeft = Math.round((deadline - today) / (1000 * 60 * 60 * 24));
-  const hour = now.getHours();
+// ── Schedule-driven reminder helpers ─────────────────────────────────────────
+//
+// BUSINESS RULES:
+//   submissionDate = the date stored in deadline field (e.g. "09-05-2026")
+//   This means auto-submit happens at 09-05-2026 00:00:00 IST.
+//   Real deadline = 08-05-2026 23:59:59 IST (night before).
+//   User gets 3 working days:
+//     Day1 = submissionDate - 3 days
+//     Day2 = submissionDate - 2 days
+//     Day3 = submissionDate - 1 day   ← last working day, must submit by 23:59
+//
+//   Fixed stage schedule (all times IST):
+//     Stage 1 → Day1 21:00
+//     Stage 2 → Day2 09:00
+//     Stage 3 → Day2 21:00
+//     Stage 4 → Day3 09:00
+//     Stage 5 → Day3 21:00  ← final, no sends after this
+//
+//   stored deadline field = submissionDate string "YYYY-MM-DD"
 
-  if (daysLeft < 0)  return -1; // past deadline — block
-  if (daysLeft === 0) return hour >= 9 ? 4 : 3; // deadline today — urgent
-  if (daysLeft === 1) return hour >= 21 ? 3 : hour >= 9 ? 2 : 1; // 1 day left: before9→stage1, 9-21→stage2, after21→stage3
-  if (daysLeft === 2) return hour >= 21 ? 1 : hour >= 9 ? 0 : 0; // 2 days left: before21→stage0(enrolled), after21→stage1
-  return 0; // 3+ days left — start at beginning
+// Returns IST date-only midnight for a YYYY-MM-DD string, as a JS Date in local time.
+function parseISTDate(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  // We work fully in IST by using toLocaleString trick for "now", and plain Date
+  // construction (which uses local time) is fine here since we only compare dates.
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+// Returns current IST time as a plain Date object (local fields = IST fields).
+function nowIST() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+}
+
+// Build the full 5-stage schedule for a given submissionDate string.
+// Returns array of { stage, sendAt } where sendAt is an ISO UTC string.
+function buildStageSchedule(submissionDateStr) {
+  if (!submissionDateStr) return [];
+  const [y, m, d] = submissionDateStr.split('-').map(Number);
+
+  // Helper: given a date offset from submission (negative = before) and hour/min in IST,
+  // return a UTC ISO string.
+  function istSlot(dayOffset, hour, min) {
+    // Construct in IST by using a fixed offset: IST = UTC+5:30
+    // We use Date.UTC with the IST date/time then subtract 5h30m
+    const utcMs = Date.UTC(y, m - 1, d + dayOffset, hour, min, 0, 0) - (5 * 60 + 30) * 60 * 1000;
+    return new Date(utcMs).toISOString();
+  }
+
+  return [
+    { stage: 1, sendAt: istSlot(-3, 21, 0) },  // Day1 21:00 IST  (submissionDate - 3 days, 9PM)
+    { stage: 2, sendAt: istSlot(-2, 9,  0) },  // Day2 09:00 IST  (submissionDate - 2 days, 9AM)
+    { stage: 3, sendAt: istSlot(-2, 21, 0) },  // Day2 21:00 IST  (submissionDate - 2 days, 9PM)
+    { stage: 4, sendAt: istSlot(-1, 9,  0) },  // Day3 09:00 IST  (submissionDate - 1 day,  9AM)
+    { stage: 5, sendAt: istSlot(-1, 21, 0) },  // Day3 21:00 IST  (submissionDate - 1 day,  9PM) ← LAST
+  ];
+}
+
+// calcNextSchedule — used when ADDING a new user.
+// Strict: only picks slots that are strictly in the future (now < slotTime).
+// If a slot's scheduled time has already passed, skip it — the cron ran without this user.
+function calcNextSchedule(submissionDateStr) {
+  if (!submissionDateStr) return null;
+  const schedule = buildStageSchedule(submissionDateStr);
+  const nowUtc = new Date();
+  for (const slot of schedule) {
+    const slotTime = new Date(slot.sendAt);
+    if (nowUtc < slotTime) {
+      return { nextStage: slot.stage, nextSendAt: slot.sendAt };
+    }
+  }
+  return null; // All slots are in the past — expired
+}
+
+
+// Given a submissionDate and a stage that was just sent, find the NEXT stage after it.
+// Returns { nextStage, nextSendAt } or null if stage 5 was just sent (all done).
+// After sending a stage, advance to the next one.
+// If the next slot's scheduled time is already in the past (downtime scenario),
+// we keep its original sendAt — which means next_send_at <= now is immediately true,
+// so the NEXT cron run will pick it up. We never send two stages in the same batch run;
+// each cron run sends at most one stage per member, preserving order.
+function calcNextScheduleAfterStage(submissionDateStr, justSentStage) {
+  if (!submissionDateStr || justSentStage >= 5) return null;
+  const schedule = buildStageSchedule(submissionDateStr);
+  const remaining = schedule.filter(s => s.stage > justSentStage);
+  if (!remaining.length) return null;
+  // Always use the original scheduled sendAt — even if it's in the past.
+  // This guarantees next_send_at <= now on the next cron run, so it fires immediately.
+  return { nextStage: remaining[0].stage, nextSendAt: remaining[0].sendAt };
+}
+
+// Legacy alias used in a few places — now only used to check expired status.
+// Returns -1 if expired (past all stage slots), 0 otherwise.
+function calcStartingStage(submissionDateStr) {
+  if (!submissionDateStr) return 0;
+  const result = calcNextSchedule(submissionDateStr);
+  return result ? 0 : -1;
 }
 
 // ── Seed default email templates if missing ───────────────────────────────────
@@ -955,11 +1043,13 @@ app.post('/api/reminders', requireAuth, (req, res) => {
   if (!memberEmail) return res.status(400).json({ error: 'Member email required' });
   const existing = stmts.getReminderByEmail.get(memberEmail);
   if (existing) return res.status(409).json({ error: 'Reminder already exists for this email' });
-  const rawStage = calcStartingStage(deadline);
-  const startStage = rawStage === -1 ? 0 : rawStage;
+  const sched = deadline ? calcNextSchedule(deadline) : null;
+  if (deadline && !sched) return res.status(400).json({ error: 'Submission date has passed — all reminder slots are expired.' });
   const info = stmts.insReminder.run(
     memberEmail, memberName, companyId || null,
-    startStage, deadline || null, loginUrl, batchName, projectName
+    deadline || null, loginUrl, batchName, projectName,
+    sched ? sched.nextStage : null,
+    sched ? sched.nextSendAt : null
   );
   res.json({ ok: true, id: info.lastInsertRowid });
 });
@@ -997,11 +1087,13 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
     for (const m of members) {
       if (!m.email) { skipped++; continue; }
       if (existingSet.has(m.email)) { skipped++; continue; }
-      const rawStage = calcStartingStage(deadline);
-      const startStage = rawStage === -1 ? 0 : rawStage;
+      const sched = deadline ? calcNextSchedule(deadline) : null;
+      if (deadline && !sched) { skipped++; continue; } // all slots expired
       stmts.insReminder.run(
         m.email, m.name || '', companyId || null,
-        startStage, deadline || null, loginUrl, batchName, projectName
+        deadline || null, loginUrl, batchName, projectName,
+        sched ? sched.nextStage : null,
+        sched ? sched.nextSendAt : null
       );
       added++;
     }
@@ -1208,6 +1300,7 @@ cron.schedule('0 2 * * *', () => {
 
 // ── Auto Reminder Cron (Asia/Kolkata — 09:00 and 21:00 IST) ──────────────────
 // NOTE: Cron timing must NOT be changed
+// Processing is now schedule-driven: pendingReminders filters by next_send_at <= now
 async function runReminderBatch() {
   const pending = stmts.pendingReminders.all();
   if (!pending.length) {
@@ -1227,7 +1320,25 @@ async function runReminderBatch() {
     const delay = jitter(3000, 12000);
     await sleep(delay);
 
-    const nextStage = reminder.stage + 1;
+    // Use next_stage from the schedule (set at insert / after each send)
+    const stageToSend = reminder.next_stage;
+    if (!stageToSend || stageToSend < 1 || stageToSend > 5) {
+      console.warn(`[Reminder] Invalid next_stage (${stageToSend}) for ${reminder.member_email} — skipping`);
+      continue;
+    }
+
+    // Hard guard: never send a reminder on or after the submission date (deadline field).
+    // Submission happens at deadline 00:00:00 IST. No reminder is meaningful after that point.
+    if (reminder.deadline) {
+      const [dy, dm, dd] = reminder.deadline.split('-').map(Number);
+      const submissionUtc = new Date(Date.UTC(dy, dm - 1, dd, 0, 0, 0) - (5 * 60 + 30) * 60 * 1000);
+      if (new Date() >= submissionUtc) {
+        console.log(`[Reminder] Skipping stage ${stageToSend} for ${reminder.member_email} — submission date ${reminder.deadline} has passed.`);
+        stmts.setReminderComplete.run(reminder.id);
+        continue;
+      }
+    }
+
     const senderEmail = getNextSender() || process.env.SENDER_EMAIL;
     if (!senderEmail) {
       console.warn(`[Reminder] No sender for ${reminder.member_email} — skipping`);
@@ -1244,16 +1355,25 @@ async function runReminderBatch() {
       const coRow = stmts.getCompany.get(reminder.company_id);
       if (coRow?.logo_path) logoUrl = `${APP_BASE_URL}/api/companies/${reminder.company_id}/logo`;
     }
-const stageTplNames = ['','stage1','stage2','stage3','stage4','stage5'];
-    const stageTpl = stmts.getTemplate.get(stageTplNames[nextStage]);
-    const subject = stageTpl?.subject ? parseTemplateVars(stageTpl.subject, { companyName: co.name, memberName: reminder.member_name || 'Member', firstName: (reminder.member_name||'Member').split(' ')[0], email: reminder.member_email, deadlineDate: reminder.deadline || '', loginUrl: reminder.login_url || '', projectName: reminder.project_name || '' }) : buildReminderSubject(nextStage, co.name);
+
+    const stageTplNames = ['', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5'];
+    const stageTpl = stmts.getTemplate.get(stageTplNames[stageToSend]);
+    const subject = stageTpl?.subject
+      ? parseTemplateVars(stageTpl.subject, {
+          companyName:  co.name,
+          memberName:   reminder.member_name || 'Member',
+          firstName:    (reminder.member_name || 'Member').split(' ')[0],
+          email:        reminder.member_email,
+          deadlineDate: reminder.deadline || '',
+          loginUrl:     reminder.login_url || '',
+          projectName:  reminder.project_name || ''
+        })
+      : buildReminderSubject(stageToSend, co.name);
     const stageOpening = stageTpl?.opening || null;
     const unsubLink = `${APP_BASE_URL}/unsubscribe?token=${emailToToken(reminder.member_email)}`;
 
     try {
       const resend = new Resend(apiKey);
-      // Use the company's help_email (or REPLY_TO_EMAIL env var) as reply_to
-      // so that member replies reach a real inbox — not the rotating sender address.
       const replyToAddr = reminder.company_help_email || process.env.REPLY_TO_EMAIL || senderEmail;
       const sendPromise = resend.emails.send({
         from: `${co.name} <${senderEmail}>`,
@@ -1262,7 +1382,7 @@ const stageTplNames = ['','stage1','stage2','stage3','stage4','stage5'];
         subject,
         html: buildReminderEmail({
           member: { name: reminder.member_name || 'Member', email: reminder.member_email },
-          co, stage: nextStage,
+          co, stage: stageToSend,
           deadline: reminder.deadline,
           loginUrl: reminder.login_url || '',
           helpPhone: reminder.company_phone || '',
@@ -1270,22 +1390,25 @@ const stageTplNames = ['','stage1','stage2','stage3','stage4','stage5'];
           noteText: reminder.company_note || '',
           logoUrl,
           projectName: reminder.project_name || '',
-          unsubscribeLink: unsubLink
+          unsubscribeLink: unsubLink,
+          openingOverride: stageOpening
         })
       });
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Reminder send timeout after 30s')), 30000)
       );
       const { error } = await Promise.race([sendPromise, timeoutPromise]);
-
       if (error) throw new Error(error.message);
 
-       stmts.updReminderStage.run(nextStage, reminder.id);
-      if (nextStage === 5) stmts.setReminderComplete.run(reminder.id);
-      stmts.insReminderLog.run(reminder.member_email, subject, 'success', '', nextStage, senderEmail);
-      console.log(`[Reminder] Sent stage ${nextStage} to ${reminder.member_email}`);
+      // Advance to next scheduled slot
+      // Use lenient cron version for advancing so downtime-recovered sends still schedule next slot
+      const afterNext = calcNextScheduleAfterStage(reminder.deadline, stageToSend);
+      stmts.updReminderStage.run(stageToSend, afterNext ? afterNext.nextStage : null, afterNext ? afterNext.nextSendAt : null, reminder.id);
+      if (stageToSend === 5 || !afterNext) stmts.setReminderComplete.run(reminder.id);
+      stmts.insReminderLog.run(reminder.member_email, subject, 'success', '', stageToSend, senderEmail);
+      console.log(`[Reminder] Sent stage ${stageToSend} to ${reminder.member_email}`);
     } catch (e) {
-      stmts.insReminderLog.run(reminder.member_email, subject, 'failed', e.message, nextStage, senderEmail);
+      stmts.insReminderLog.run(reminder.member_email, subject, 'failed', e.message, stageToSend, senderEmail);
       console.error(`[Reminder] Failed for ${reminder.member_email}: ${e.message}`);
     }
   }
