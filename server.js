@@ -944,12 +944,12 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
   if (!apiKey || !from) return res.json({ ok: false, message: 'Missing RESEND_API_KEY or no senders configured.' });
   if (!toEmail) return res.json({ ok: false, message: 'No recipient email provided' });
 
-  const co = { name: senderName || '[Company Name]', phone: '+91 98765 43210', address: '' };
+  const co = { name: senderName || '[Company Name]', phone: '', address: '' };
   const testMember = { name: 'Test User', email: toEmail };
   const testDeadline = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
   const testLoginUrl = 'https://example.com/login';
   const unsubLink = buildUnsubscribeLink(toEmail, req);
-  const initials = 'MB';
+  const initials = (co.name || 'MB').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
   let subject, html;
 
@@ -980,10 +980,10 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 2,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '+91 98765 43210', helpEmail: from,
-      noteText: 'This is a sample note from company settings.',
+      helpPhone: '', helpEmail: from,
+      noteText: '',
       logoUrl, projectName: '', unsubscribeLink: unsubLink,
-      openingOverride: tpl2?.opening || null
+      openingOverride: tpl1?.opening || null
     });
   } else if (template === 'reminder3') {
     const tpl3 = stmts.getTemplate.get('stage3');
@@ -1020,8 +1020,8 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildPosterEmail({
       member: testMember, co, initials,
       deadline: testDeadline, deadlineTime: '23:59',
-      loginUrl: testLoginUrl, helpPhone: '+91 98765 43210',
-      helpEmail: from, messageNote: 'This is a basic test email.',
+      loginUrl: testLoginUrl, helpPhone: '',
+      helpEmail: from, messageNote: regTpl?.opening || 'This is a test email to preview your registration confirmation template.',
       logoUrl, unsubscribeLink: unsubLink
     });
   }
@@ -1153,7 +1153,10 @@ app.post('/api/reminders/crosscheck', requireAuth, async (req, res) => {
       const coRow = stmts.getCompany.get(reminder.company_id);
       if (coRow?.logo_path) logoUrl = APP_BASE_URL + '/api/companies/' + reminder.company_id + '/logo';
     }
-    const subject = buildReminderSubject(nextStage, co.name);
+    const stageTplNames = ['', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5'];
+    const crossTpl = stmts.getTemplate.get(stageTplNames[nextStage]);
+    const subject = crossTpl?.subject ? parseTemplateVars(crossTpl.subject, { companyName: co.name, memberName: reminder.member_name || 'Member', firstName: (reminder.member_name || 'Member').split(' ')[0], email: reminder.member_email, deadlineDate: reminder.deadline || '', loginUrl: reminder.login_url || '', projectName: reminder.project_name || '' }) : buildReminderSubject(nextStage, co.name);
+    const stageOpening = crossTpl?.opening || null;
     const unsubLink = APP_BASE_URL + '/unsubscribe?token=' + emailToToken(reminder.member_email);
     try {
       const resend = new Resend(apiKey);
