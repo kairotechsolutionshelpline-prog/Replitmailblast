@@ -269,6 +269,9 @@ const stmts = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function jitter(minMs, maxMs) { return Math.floor(Math.random() * (maxMs - minMs)) + minMs; }
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
 
 // NOTE: getNextSender and round-robin logic must NOT be modified
 function getNextSender() {
@@ -860,6 +863,14 @@ app.post('/api/send', requireAuth, async (req, res) => {
   for (let i = 0; i < members.length; i++) {
     const member = members[i];
 
+    // Skip invalid emails
+    if (!isValidEmail(member.email)) {
+      failed++;
+      results.push({ name: member.name, email: member.email, status: 'failed', error: 'Invalid email address' });
+      emit({ type: 'progress', index: i+1, total: members.length, sent, failed, email: member.email, name: member.name, status: 'error', error: 'Invalid email address' });
+      continue;
+    }
+
     // Note 11: Skip unsubscribed
     if (stmts.isUnsubscribed.get(member.email)) {
       emit({ type: 'progress', index: i+1, total: members.length, sent, failed,
@@ -1099,7 +1110,7 @@ app.post('/api/reminders/bulk', requireAuth, (req, res) => {
   let added = 0, skipped = 0;
   const tx = db.transaction(() => {
     for (const m of members) {
-      if (!m.email) { skipped++; continue; }
+      if (!m.email || !isValidEmail(m.email)) { skipped++; continue; }
       if (existingSet.has(m.email)) { skipped++; continue; }
       const sched = deadline ? calcNextSchedule(deadline) : null;
       if (deadline && !sched) { skipped++; continue; } // all slots expired
@@ -1301,6 +1312,27 @@ app.get('/api/custom-mail/history', requireAuth, (req, res) => {
 // ── Page routes ───────────────────────────────────────────────────────────────
 app.get('/',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+
+// ── Daily SQLite Backup at 3:00 AM IST ───────────────────────────────────────
+cron.schedule('0 3 * * *', () => {
+  const file = path.join(BACKUP_DIR, `backup-${new Date().toISOString().split('T')[0]}.db`);
+  db.backup(file)
+    .then(() => console.log('[Backup] Saved:', file))
+    .catch(e => console.error('[Backup] Failed:', e.message));
+
+  // Keep only last 7 backups — delete older ones
+  try {
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('backup-') && f.endsWith('.db'))
+      .sort();
+    if (files.length > 7) {
+      files.slice(0, files.length - 7).forEach(f => {
+        fs.unlinkSync(path.join(BACKUP_DIR, f));
+        console.log('[Backup] Deleted old backup:', f);
+      });
+    }
+  } catch (e) { console.error('[Backup] Cleanup failed:', e.message); }
+}, { timezone: 'Asia/Kolkata' });
 
 // ── Note 11: Auto Reminder Cron — daily prune of logs older than 5 days ───────
 cron.schedule('0 2 * * *', () => {
