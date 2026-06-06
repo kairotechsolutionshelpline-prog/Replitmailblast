@@ -983,7 +983,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
       helpPhone: '', helpEmail: from,
       noteText: '',
       logoUrl, projectName: '', unsubscribeLink: unsubLink,
-      openingOverride: tpl1?.opening || null
+      openingOverride: tpl2?.opening || null  
     });
   } else if (template === 'reminder3') {
     const tpl3 = stmts.getTemplate.get('stage3');
