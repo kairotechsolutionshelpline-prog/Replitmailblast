@@ -928,9 +928,13 @@ app.post('/api/send', requireAuth, async (req, res) => {
 });
 // ── Test send ─────────────────────────────────────────────────────────────────
 app.post('/api/test-send', requireAuth, async (req, res) => {
-  const { toEmail, senderName, fromEmail, template } = req.body;
+  const { toEmail, senderName, fromEmail, template, companyId } = req.body;
   const apiKey  = process.env.RESEND_API_KEY;
   let logoUrl = process.env.LOGO_URL || null;
+  if (!logoUrl && companyId) {
+    const testCoRow = stmts.getCompany.get(companyId);
+    if (testCoRow?.logo_path) logoUrl = `${getBaseUrl(req)}/api/companies/${companyId}/logo`;
+  }
 
   let from = fromEmail;
   if (!from) from = getNextSender();
@@ -1361,7 +1365,10 @@ async function runReminderBatch() {
     let logoUrl = process.env.LOGO_URL || null;
     if (!logoUrl && reminder.company_id) {
       const coRow = stmts.getCompany.get(reminder.company_id);
-      if (coRow?.logo_path) logoUrl = `${APP_BASE_URL}/api/companies/${reminder.company_id}/logo`;
+      if (coRow?.logo_path) {
+        const base = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+        logoUrl = base ? `${base}/api/companies/${reminder.company_id}/logo` : null;
+      }
     }
 
     const stageTplNames = ['', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5'];
