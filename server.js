@@ -473,7 +473,7 @@ const campaignPaused = new Map();
 
 // ── Express setup ─────────────────────────────────────────────────────────────
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 const loginLimiter = rateLimit({
