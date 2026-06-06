@@ -478,9 +478,17 @@ const loginLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many login attempts. Please wait 15 minutes.' }
 });
+  let sessionStore;
+try {
   const SqliteStore = require('better-sqlite3-session-store')(session);
+  sessionStore = new SqliteStore({ client: db, expired: { clear: true, intervalMs: 900000 } });
+  console.log('[Session] Using SQLite session store');
+} catch (e) {
+  console.warn('[Session] better-sqlite3-session-store not found, using MemoryStore');
+  sessionStore = undefined;
+}
 app.use(session({
-  store: new SqliteStore({ client: db, expired: { clear: true, intervalMs: 900000 } }),
+  store: sessionStore,
   secret: process.env.SESSION_SECRET,
   resave: false, saveUninitialized: false, rolling: true,
   cookie: { maxAge: 24*60*60*1000, httpOnly: true, secure: isProd, sameSite: 'lax' }
