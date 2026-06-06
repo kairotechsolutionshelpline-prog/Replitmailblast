@@ -16,7 +16,7 @@
     "express-session": "^1.17.3",
     "node-cron": "^3.0.3",
     "resend": "^3.2.0",
-    "better-sqlite3-session-store": "^5.1.1",
+    "better-sqlite3-session-store": "*",
     "sanitize-html": "^2.13.0"
   },
   "engines": {
