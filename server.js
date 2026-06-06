@@ -1652,7 +1652,6 @@ function buildReminderEmail({ member, co, stage, deadline, loginUrl, helpPhone, 
 console.log('=== MailBlast v4.0 Starting ===');
 console.log('PORT:', PORT);
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
-console.log('DATA_DIR:', DATA_DIR);
 console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL || '(not set)');
 console.log('RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'SET ✓' : 'NOT SET ✗');
 console.log('APP_BASE_URL:', APP_BASE_URL);
