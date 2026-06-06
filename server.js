@@ -480,6 +480,9 @@ const loginLimiter = rateLimit({
 });
 
 app.use(session({
+  const SqliteStore = require('better-sqlite3-session-store')(session);
+app.use(session({
+  store: new SqliteStore({ client: db, expired: { clear: true, intervalMs: 900000 } }),
   secret: process.env.SESSION_SECRET,
   resave: false, saveUninitialized: false, rolling: true,
   cookie: { maxAge: 24*60*60*1000, httpOnly: true, secure: isProd, sameSite: 'lax' }
