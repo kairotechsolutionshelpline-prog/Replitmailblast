@@ -972,7 +972,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 1,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '+91 98765 43210', helpEmail: from,
+      helpPhone: co.phone || '', helpEmail: from,
       noteText: 'This is a sample note from company settings.',
       logoUrl, projectName: '', unsubscribeLink: unsubLink,
       openingOverride: tpl1?.opening || null
@@ -983,8 +983,8 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 2,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '', helpEmail: from,
-      noteText: '',
+      helpPhone: co.phone || '', helpEmail: from,
+      noteText: 'This is a sample note from company settings.',
       logoUrl, projectName: '', unsubscribeLink: unsubLink,
       openingOverride: tpl2?.opening || null  
     });
@@ -994,7 +994,9 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 3,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
+      helpPhone: co.phone || '', helpEmail: from,
+      noteText: 'This is a sample note from company settings.',
+      logoUrl, projectName: '',
       unsubscribeLink: unsubLink,
       openingOverride: tpl3?.opening || null
     });
@@ -1004,7 +1006,9 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 4,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
+      helpPhone: co.phone || '', helpEmail: from,
+      noteText: 'This is a sample note from company settings.', 
+      logoUrl, projectName: '',
       unsubscribeLink: unsubLink,
       openingOverride: tpl4?.opening || null
     });
@@ -1014,7 +1018,9 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
     html = buildReminderEmail({
       member: testMember, co, stage: 5,
       deadline: testDeadline, loginUrl: testLoginUrl,
-      helpPhone: '+91 98765 43210', helpEmail: from, logoUrl, projectName: '',
+      helpPhone: co.phone || '', helpEmail: from,
+      noteText: 'This is a sample note from company settings.',
+      logoUrl, projectName: '',
       unsubscribeLink: unsubLink,
       openingOverride: tpl5?.opening || null
     });
