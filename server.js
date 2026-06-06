@@ -478,8 +478,6 @@ const loginLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many login attempts. Please wait 15 minutes.' }
 });
-
-app.use(session({
   const SqliteStore = require('better-sqlite3-session-store')(session);
 app.use(session({
   store: new SqliteStore({ client: db, expired: { clear: true, intervalMs: 900000 } }),
@@ -1030,7 +1028,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
       member: testMember, co, initials,
       deadline: testDeadline, deadlineTime: '23:59',
       loginUrl: testLoginUrl, helpPhone: '',
-      helpEmail: from, messageNote: regTpl?.opening || 'This is a test email to preview your registration confirmation template.',
+      helpEmail: from, messageNote: 'This is a test email to preview your registration confirmation template.',
       logoUrl, unsubscribeLink: unsubLink
     });
   }
