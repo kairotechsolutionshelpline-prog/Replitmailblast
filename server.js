@@ -849,28 +849,16 @@ app.post('/api/send', requireAuth, async (req, res) => {
     'X-Accel-Buffering': 'no'
   });
 
-  const emit = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+  const emit = (data) => { try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {} };
 
   let sent = 0, failed = 0;
   const results = [];
   const startTime = Date.now();
-  const controller = new AbortController();
 
-  req.on('close', () => { controller.abort(); campaignPaused.delete(cid); });
   emit({ type: 'start', total: members.length, sender: fromAddr, campaignId: cid });
 
-  try {
   for (let i = 0; i < members.length; i++) {
-    if (controller.signal.aborted) break;
-
-    // Note 11: Pause/Resume — hold in loop while paused
-    while (campaignPaused.get(cid) === true && !controller.signal.aborted) {
-      emit({ type: 'paused', index: i, sent, failed });
-      await sleep(1500);
-    }
-    if (controller.signal.aborted) break;
-
-    const member  = members[i];
+    const member = members[i];
 
     // Note 11: Skip unsubscribed
     if (stmts.isUnsubscribed.get(member.email)) {
@@ -923,23 +911,20 @@ app.post('/api/send', requireAuth, async (req, res) => {
       emit({ type: 'progress', index: i+1, total: members.length, sent, failed, email: member.email, name: member.name, status: 'error', error: e.message });
     }
 
-    if (!controller.signal.aborted && i < members.length - 1) {
+    if (i < members.length - 1) {
       await sleep(jitter(1800, 2500));
     }
   }
-  } finally {
-    campaignPaused.delete(cid);
-  }
+
+  campaignPaused.delete(cid);
   const duration = Math.round((Date.now() - startTime) / 1000);
 
-  if (!controller.signal.aborted) {
-    const id = Date.now().toString();
-    stmts.insCampaign.run(id, co.name, members.length, sent, failed, duration,
-      senderSource || '', new Date().toISOString(), JSON.stringify(results));
-  }
+  const id = Date.now().toString();
+  stmts.insCampaign.run(id, co.name, members.length, sent, failed, duration,
+    senderSource || '', new Date().toISOString(), JSON.stringify(results));
 
   emit({ type: 'done', sent, failed, duration, sender: fromAddr });
-  res.end();
+  try { res.end(); } catch (_) {}
 });
 // ── Test send ─────────────────────────────────────────────────────────────────
 app.post('/api/test-send', requireAuth, async (req, res) => {
@@ -1259,15 +1244,12 @@ app.post('/api/custom-mail/send', requireAuth, async (req, res) => {
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no'
   });
-  const emit = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-  const controller = new AbortController();
-  req.on('close', () => controller.abort());
+  const emit = (data) => { try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) {} };
 
   let sent = 0, failed = 0;
   emit({ type: 'start', total: recipients.length, sender: from });
 
   for (let i = 0; i < recipients.length; i++) {
-    if (controller.signal.aborted) break;
     const to = recipients[i].trim();
     if (!to) continue;
 
@@ -1296,18 +1278,16 @@ app.post('/api/custom-mail/send', requireAuth, async (req, res) => {
       failed++;
       emit({ type: 'progress', index: i+1, total: recipients.length, sent, failed, email: to, status: 'error', error: e.message });
     }
-    if (!controller.signal.aborted && i < recipients.length - 1) {
+    if (i < recipients.length - 1) {
       await sleep(jitter(1500, 2500));
     }
   }
 
-  if (!controller.signal.aborted) {
-    const preview = cleanHtml.replace(/<[^>]+>/g, '').substring(0, 200);
-    stmts.insCustomHistory.run(subject, from, sent, preview, cleanHtml);
-  }
+  const preview = cleanHtml.replace(/<[^>]+>/g, '').substring(0, 200);
+  stmts.insCustomHistory.run(subject, from, sent, preview, cleanHtml);
 
   emit({ type: 'done', sent, failed, sender: from });
-  res.end();
+  try { res.end(); } catch (_) {}
 });
 
 app.get('/api/custom-mail/history', requireAuth, (req, res) => {
